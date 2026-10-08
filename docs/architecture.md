@@ -33,9 +33,9 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 
 - **删掉**：`Inspector` 抽屉（旧文件 1011–1125 行，115 行：6 个属性输入框 + 批注列表 + 就这个元素写批注）、工具栏「批注（N）」入口、元素选中态 `selected`、一批只服务于它的文案 key（`fieldText` / `fieldColor` / `fieldFontSize` / `commentNew` / `commentSave` / `commentLocate` / `commentUnanchored` / `noComments` / `deselect` / `pickHint` 等）与 `rgbToHex()`，以及批注角标随缩放同步的两个发送点。
 - **新增**：会话 → 输入框动作面的注入桥（模块级 `composerInserters` + 隐藏占位 `ComposerBridge`）、引用构造、插入函数 `insertReferenceIntoComposer`（v8 起它是降级路径）、探针的 `{cmd:'highlight'}` 脉冲高亮、预览底部的「最近引用」状态条与失败时的一键复制。引用构造在 v7 时是一个 `buildElementReference(frame, info)`；v8 起按"数据 / 文本"拆成 `refPayload()` + `locatorText()`（**旧名字 `buildElementReference` 已不存在**，读旧文档时注意换算）。
-- **一处刻意保留**：探针里给旧父页面用的批注角标代码没删（新父页面不再发 `setComments`，缩放的 `setBadgeScale` 发送点已删）——它是**兼容死代码**，不代表"批注功能还在"。两处设计理由以注释留在 `client.js`（1164 行"这里**不再有**元素属性抽屉"、1390 行"元素属性表把人逼进 6 个输入框"），下一个人问"为什么砍"时答案就在原地。
+- **一处曾经刻意保留（后来也清掉了）**：v7 时探针里给旧父页面用的批注角标代码没删（新父页面不再发 `setComments`，缩放的 `setBadgeScale` 发送点已删），当时定性为**兼容死代码**；批注能力整体移除时，这段残留连同批注浮层一并删除，`client.js` 里不再有批注角标与浮层。设计理由仍以注释留在 `client.js`（"这里**不再有**\"元素属性\"抽屉"、"元素属性表把人逼进 6 个输入框"），下一个人问"为什么砍"时答案就在原地。
 
-**数据层零改动，这是刻意的**：`comments[]` 仍在 `.design/design.json` 里、`design_status` 仍返回它们、host 的 `add_comment` / `resolve_comment` 两个 op 仍可用——**删的是界面，不是数据**。已经写下的批注不能凭空消失；以后若要恢复某种批注视图，也不必先做数据迁移。
+**批注能力已整体移除（界面 + 数据 + 接口 + 客户端残留）**：v7 让画布不再能写批注，剩下那套没人调用的骨架这一次也清掉了——`.design/design.json` 不再有 `comments[]`（老的带批注文件读入时按当前结构归一化，批注字段不会写回）、`design_status` 不再返回 `comments`（`includeResolved` 一并取消）、host 的 `add_comment` / `resolve_comment` 两个 op 与探针里的批注角标/浮层代码都已删除。要恢复批注视图，等于连数据格式一起重做。
 
 **引用是怎么进输入框的**（技术路径在 DSH 源码里核对过，不是猜）：`@deepseek-ai/dsh-client-ui-conversation` 通过 `ctx.uiSession.provide({ props: ['inputActions'] })` 把 `InputActions` 发给每个 session 作用域的插槽组件；预览面板挂在 `sidebar.right.pane.tab`（session 级），props 上本来就有它。插件另外注册一个隐藏的 `conversation.input.dock` 占位（`ComposerBridge`，渲染 `null`）作为回落，从标准 props 取同一份 `inputActions`，按 `sessionId` 登记进 `composerInserters`；两条路都不通时预览面板给可见失败提示，不静默。
 
@@ -160,13 +160,13 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 
 | 工具 | 作用 |
 |---|---|
-| `design_status` | 无副作用。返回工程、frames、tokens、**未处理批注（v7 起是历史数据，可能为空）**、当前选中项。agent 动手前应先调它。 |
+| `design_status` | 无副作用。返回工程、frames、tokens、当前选中项。agent 动手前应先调它。 |
 | `design_frame_write` | 新建或覆写一屏（`id/name/html/width/height/x/y`），返回 `{id, file, bytes}`。 |
-| `design_canvas_apply` | 应用一组画布操作。词表：`add_frame / move_frame / resize_frame / rename_frame / delete_frame / switch_tokens / add_comment / resolve_comment / set_viewport / select`；**未知操作整批拒绝**（`EUNKNOWN`），不做部分应用。 |
+| `design_canvas_apply` | 应用一组画布操作。词表：`add_frame / move_frame / resize_frame / rename_frame / delete_frame / switch_tokens / set_viewport / select`；**未知操作整批拒绝**（`EUNKNOWN`），不做部分应用。 |
 
 改某一屏的页面内容也可以**直接用 read/write/edit 改 `.design/frames/<id>.html`**——预览面板会自动刷新，不必绕工具。
 
-**UI 不再调用的 op**（保留以兼容与复用，别当漏接）：`move_frame`、`set_viewport`；v7 起再加上 `add_comment`、`resolve_comment`（画布不再有写批注的界面，但工具调用与历史数据仍然可用）；`add_frame` 的 `x/y` 也不再影响任何布局。
+**UI 不再调用的 op**（保留以兼容与复用，别当漏接）：`move_frame`、`set_viewport`；`add_frame` 的 `x/y` 也不再影响任何布局。
 
 唯一允许的例外：`design_status` 在发现 `design.json` 非法时，会按 AC11 把它备份成 `design.json.bak`（这是错误恢复的必要写入，不算违反"无副作用"）。
 
@@ -196,15 +196,13 @@ POST /design-canvas/api            （exact、同源）
 
 ```
 <workspace>/.design/
-├── design.json   # viewport / selection / tokens 镜像 / frames[] / comments[]
+├── design.json   # viewport / selection / tokens 镜像 / frames[]
 ├── tokens.css    # 选中预设的逐字拷贝（不改变量名）
 └── frames/*.html # 每屏一个自包含 HTML
 ```
 
 `design.json` 的 `tokens` 字段是 `tokens.css` 的只读镜像，解析规则：去掉 `--` 后把第一个 `-` 换成 `.`
 （`--color-primary` → `color.primary`，`--space-2` → `space.2`）。三套预设各 56 个变量，切换预算是整块替换、页面样式一行不改。
-
-**批注锚点**：v5 起 `comments[].target` 是元素选择器路径，`x/y` 写 0、不再承担定位语义。v7 起画布既不能写批注也不展示批注，这些字段只对 agent 有意义（`design_status` 会把原文与 `target` 一起读出来）；选择器在 agent 重写 HTML 后可能失效，**读到的锚点要自己用标签名 + 文字在文件里核对**，别默认它还准（见 SPEC follow_up F2）。
 
 **不再被 UI 使用的字段**：`viewport`、`frames[].x/y`（保留仅为向后兼容）。
 
@@ -245,7 +243,7 @@ node scripts/post-restart-check.mjs               # 重启后：路由 / 工具 
 
 **在用户的项目里：应该提交。** 这是"真源是文件"这条取舍的前提——设计稿进了 git 才能 review、diff、回溯，也才能和代码改动一起被审查。
 
-**在本插件仓库里：不提交，已写进 `.gitignore`。** 因为这里的 `.design/` 是开发与演示数据（还带着验收期留下的测试批注），不是插件源码。
+**在本插件仓库里：不提交，已写进 `.gitignore`。** 因为这里的 `.design/` 是开发与演示数据，不是插件源码。
 
 需要留意的两点：
 

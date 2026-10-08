@@ -69,8 +69,6 @@ export const OP_KINDS = Object.freeze([
   'rename_frame',
   'delete_frame',
   'switch_tokens',
-  'add_comment',
-  'resolve_comment',
   'set_viewport',
   'select',
 ]);
@@ -101,25 +99,12 @@ export const FRAME_ID_PATTERN = /^[A-Za-z0-9._-]{1,120}$/;
  */
 
 /**
- * @typedef {Object} Comment
- * @property {string} id
- * @property {string} frameId
- * @property {string} [target]
- * @property {string} text
- * @property {number} x
- * @property {number} y
- * @property {boolean} resolved
- * @property {string} createdAt
- */
-
-/**
  * @typedef {Object} DesignProject
  * @property {number} version
  * @property {{x: number, y: number, zoom: number}} viewport
  * @property {Record<string, string>} tokens 从 tokens.css 的 :root 解析出的只读镜像
  * @property {Frame[]} frames
- * @property {Comment[]} comments
- * @property {{frameId?: string, commentId?: string, updatedAt?: string}} selection
+ * @property {{frameId?: string, updatedAt?: string}} selection
  * @property {string} [updatedAt]
  * @property {'user'|'agent'|'plugin'} [updatedBy] 最后一次写入来源，便于追溯
  */

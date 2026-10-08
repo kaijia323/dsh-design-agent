@@ -441,14 +441,13 @@ window.__ModuleLoader__.load({
 
     /** 空工程：首次读取前、以及 design.json 损坏时使用。 */
     function emptyProject() {
-      return { version: 2, viewport: { x: 0, y: 0, zoom: 1 }, tokens: {}, frames: [], comments: [] };
+      return { version: 2, viewport: { x: 0, y: 0, zoom: 1 }, tokens: {}, frames: [] };
     }
 
     /** 把磁盘上的 design.json 收敛成渲染得动的结构（字段缺失也不崩）。 */
     function normalizeProject(raw) {
       const source = raw && typeof raw === 'object' ? raw : {};
       const frames = Array.isArray(source.frames) ? source.frames : [];
-      const comments = Array.isArray(source.comments) ? source.comments : [];
       const viewport = source.viewport && typeof source.viewport === 'object' ? source.viewport : {};
       return {
         version: 2,
@@ -468,15 +467,6 @@ window.__ModuleLoader__.load({
             height: Number.isFinite(frame.height) && frame.height > 0 ? frame.height : 800,
             status: frame.status === 'ready' ? 'ready' : 'draft',
           })),
-        comments: comments
-          .filter((comment) => comment && typeof comment === 'object' && typeof comment.id === 'string')
-          .map((comment) => ({
-            id: comment.id,
-            frameId: typeof comment.frameId === 'string' ? comment.frameId : '',
-            target: typeof comment.target === 'string' ? comment.target : '',
-            text: typeof comment.text === 'string' ? comment.text : '',
-            resolved: comment.resolved === true,
-          })),
         selection: source.selection && typeof source.selection === 'object' ? source.selection : undefined,
       };
     }
@@ -492,16 +482,15 @@ window.__ModuleLoader__.load({
      * 注入每一帧的探针。
      *
      * 它跑在 opaque origin（sandbox 无 allow-same-origin）里，只能碰自己的 DOM，
-     * 与父页面之间只走 postMessage。三件事：
+     * 与父页面之间只走 postMessage。两件事：
      * 1. hover 高亮 + 点击选中元素，回报 tag/文字/常用样式 + 一条 CSS 选择器路径；
-     * 2. 接收父页面的改属性指令，改完把整篇文档回传（父页面剥离探针后写回文件）；
-     * 3. 给有批注的元素画角标；选择器指不到元素时回报"未锚定"，绝不静默丢弃。
+     * 2. 接收父页面的改属性指令，改完把整篇文档回传（父页面剥离探针后写回文件）。
      */
     const PROBE_JS = [
       '(function(){',
       'var CMD="__dshDesignCmd";',
       'function post(m){ try{ parent.postMessage(Object.assign({__dshDesign:1}, m), "*"); }catch(e){} }',
-      'var selected=null, hovered=null, hoverOutline=null, comments=[], layer=null, badgeScale=1;',
+      'var selected=null, hovered=null, hoverOutline=null;',
       'function cssPath(el){',
       '  var parts=[];',
       '  while(el && el.nodeType===1 && el!==document.documentElement){',
@@ -520,68 +509,26 @@ window.__ModuleLoader__.load({
       '    fontSize: cs.fontSize, padding: cs.padding, margin: cs.margin };',
       '}',
       'function unhover(){ if(hovered){ hovered.style.outline = hoverOutline || ""; hovered=null; hoverOutline=null; } }',
-      'function ensureLayer(){',
-      '  if(layer && layer.isConnected) return layer;',
-      '  layer = document.createElement("div");',
-      '  layer.setAttribute("data-dsh-comment-layer","1");',
-      '  layer.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:2147483647";',
-      '  document.body.appendChild(layer);',
-      '  return layer;',
-      '}',
-      '// 重画批注角标；回报锚定成功与失败的 id，让父页面显示"未锚定"而不是当成没有。',
-      'function layoutComments(){',
-      '  var L = ensureLayer();',
-      '  L.innerHTML = "";',
-      '  var anchored = [], missing = [];',
-      '  for(var i=0;i<comments.length;i++){',
-      '    var c = comments[i], el = null;',
-      '    if(c.target){ try{ el = document.querySelector(c.target); }catch(e){ el = null; } }',
-      '    if(!el){ missing.push(c.id); continue; }',
-      '    var r = el.getBoundingClientRect();',
-      '    var b = document.createElement("button");',
-      '    b.type = "button"; b.textContent = String(i+1);',
-      '    b.setAttribute("data-dsh-comment-mark", c.id);',
-      '    var k = 1 / (badgeScale > 0 ? badgeScale : 1);',
-      '    b.style.cssText = "position:fixed;pointer-events:auto;cursor:pointer;border:none;background:#d97a45;color:#fff;font-weight:600;font-family:system-ui;text-align:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.35)"',
-      '      + ";width:" + (18*k) + "px;height:" + (18*k) + "px;border-radius:" + (9*k) + "px;font-size:" + (11*k) + "px;line-height:" + (18*k) + "px";',
-      '    b.style.left = Math.max(2, r.right - 9*k) + "px";',
-      '    b.style.top = Math.max(2, r.top - 9*k) + "px";',
-      '    b.onclick = (function(id){ return function(ev){ ev.preventDefault(); ev.stopPropagation(); post({ type:"commentClick", id:id }); }; })(c.id);',
-      '    L.appendChild(b); anchored.push(c.id);',
-      '  }',
-      '  post({ type:"commentAnchors", anchored: anchored, missing: missing });',
-      '}',
-      '// 序列化前摘掉探针自己加的节点（悬停描边 + 批注浮层），否则它们会被写进用户的设计文件。',
+      '// 序列化前摘掉探针自己加的节点（悬停描边），否则它会被写进用户的设计文件。',
       'function serialize(){',
       '  unhover();',
-      '  var parentNode = layer && layer.parentNode, next = layer && layer.nextSibling;',
-      '  if(parentNode) parentNode.removeChild(layer);',
-      '  var html = "<!DOCTYPE html>\\n" + document.documentElement.outerHTML;',
-      '  if(parentNode) parentNode.insertBefore(layer, next);',
-      '  return html;',
+      '  return "<!DOCTYPE html>\\n" + document.documentElement.outerHTML;',
       '}',
       'document.addEventListener("mouseover", function(e){',
       '  if(!e.target || e.target===document.documentElement) return;',
-      '  if(insideMark(e.target)) return;',
       '  unhover(); hovered=e.target; hoverOutline=hovered.style.outline;',
       '  hovered.style.outline="2px solid #4c8dff";',
       '}, true);',
       'document.addEventListener("mouseout", function(e){ if(e.target===hovered) unhover(); }, true);',
-      'function insideMark(node){ return !!(node && node.closest && node.closest("[data-dsh-comment-mark]")); }',
       'document.addEventListener("click", function(e){',
       '  if(!e.target) return;',
-      '  if(insideMark(e.target)) return;  // 角标自己处理：放行给它的 onclick，别当成选中元素',
       '  e.preventDefault(); e.stopPropagation();',
       '  selected=e.target; unhover(); post({ type:"select", info: describe(selected) });',
       '}, true);',
       'document.addEventListener("submit", function(e){ e.preventDefault(); }, true);',
-      'window.addEventListener("scroll", function(){ if(comments.length) layoutComments(); }, true);',
-      'window.addEventListener("resize", function(){ if(comments.length) layoutComments(); });',
       'window.addEventListener("message", function(ev){',
       '  var d = ev.data;',
       '  if(!d || d[CMD]!==true) return;',
-      '  if(d.cmd==="setComments"){ comments = Array.isArray(d.comments) ? d.comments : []; layoutComments(); return; }',
-      '  if(d.cmd==="setBadgeScale"){ badgeScale = Number(d.scale) > 0 ? Number(d.scale) : 1; layoutComments(); return; }',
       '  if(d.cmd==="selectPath"){',
       '    var found=null; try{ found=document.querySelector(d.value); }catch(e){ found=null; }',
       '    if(found){ selected=found; post({ type:"select", info: describe(selected) }); }',
@@ -624,16 +571,11 @@ window.__ModuleLoader__.load({
     /**
      * 剥掉我们自己的痕迹，保证反复保存不会越积越多。
      *
-     * 两样东西要清：
-     * 1. 注入的探针 `<script>`；
-     * 2. 探针挂在 body 上的批注浮层 `<div data-dsh-comment-layer>`。探针在序列化前会先把它
-     *    摘下来，但**历史版本曾经把它写进过文件**，那份残留不会被探针自己认领，所以这里
-     *    也必须清掉，否则会一代代传下去。
+     * 只清注入的探针 `<script>`：v7 起画布上不再有浮层节点，这里不做任何额外的删除。
      */
     function stripProbe(html) {
       const script = new RegExp('<script[^>]*' + PROBE_ATTR + '="1"[^>]*>[\\s\\S]*?</script>', 'gi');
-      const layer = /<div[^>]*data-dsh-comment-layer="1"[^>]*>[\s\S]*?<\/div>/gi;
-      return String(html || '').replace(script, '').replace(layer, '');
+      return String(html || '').replace(script, '');
     }
 
     /** 真正渲染进 iframe 的文档 = 源文件 + 一个探针。 */
@@ -1231,8 +1173,6 @@ window.__ModuleLoader__.load({
         return () => registerCommand(frame.id, null);
       }, [frame.id, command, registerCommand]);
 
-      // 说明：这里曾经有一个"把缩放比同步给帧内批注角标"的 effect（`setBadgeScale`）。
-      // 批注角标随批注 UI 一并退场，缩放不再需要通知帧内任何东西——帧只负责渲染和回报点选。
       const placeholder = (label, hint) =>
         h(
           'div',
@@ -1741,7 +1681,7 @@ window.__ModuleLoader__.load({
           '目标目录：未指定，按 prompts/design-handoff.md 第 4 步推断',
           '',
           '按顺序做，不要跳步：',
-          '1. 调用 design_status，确认该 frame 仍然存在，并读走它名下所有未处理的批注——批注里的修改意见必须体现在生成代码里。',
+          '1. 调用 design_status，确认该 frame 仍然存在（id、名称、尺寸、状态）。',
           '2. read 上面那个文件全文，再 read .design/tokens.css（这两个文件只读，不要修改）。',
           '3. 探测项目技术栈：先读 package.json 的 dependencies/devDependencies，再看 src/ 的现有目录与一个已有组件的写法，跟随现有约定。没有任何可识别技术栈时，默认 React + TypeScript 函数组件 + 同目录 CSS Module。',
           '4. 生成一个组件文件，视觉一比一还原这一屏；颜色一律取自 tokens，不要硬编码新颜色；示例数据写成命名清晰的常量；不要引用 .design/ 下的任何文件。',

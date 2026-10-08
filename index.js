@@ -33,11 +33,10 @@ const FALLBACK_CONVENTIONS = [
   '',
   '本工作区启用了设计画布插件：设计真源是 `.design/` 下的真实文件。',
   '',
-  '- 动手前先调用 `design_status`，看现有 frame 与**未处理批注**（用户会直接在画布上留意见）。',
+  '- 动手前先调用 `design_status`，看现有 frame。',
   '- 一次出 1~3 屏，每屏一个自包含 HTML（样式内联），用 `design_frame_write` 落盘。',
   '- 改某一屏的页面内容可以直接用 read/write/edit 编辑 `.design/frames/<id>.html`，画布会自动刷新。',
   '- 颜色与间距请用 `.design/tokens.css` 里的变量，不要自创颜色。',
-  '- 用户批注必须先读后改，改完用 `design_canvas_apply` 的 `resolve_comment` 标记已处理。',
 ].join('\n');
 
 /**

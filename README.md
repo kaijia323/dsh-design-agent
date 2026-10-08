@@ -42,7 +42,7 @@ Anthropic 的 [Claude Design](https://support.claude.com/en/articles/14604416-ge
 - **实时同步**：agent 改文件后预览自动刷新，不会把你切到别的屏上去。
 - **落地到项目**：把当前屏交给 agent，按项目技术栈生成组件写进 `src/`。
 
-**不做**：无限画布与空间编排、图层面板、矢量钢笔、布尔运算、自动布局算法、多人实时协同、组件变体、Figma 导入、反向同步；**元素属性面板与画布内的批注编辑器也不再做了**——点选只把元素引用进对话（批注的数据结构、工具与已有数据保留，只是不再有写批注的界面）。
+**不做**：无限画布与空间编排、图层面板、矢量钢笔、布尔运算、自动布局算法、多人实时协同、组件变体、Figma 导入、反向同步；**元素属性面板与画布内的批注编辑器也不再做了**——点选只把元素引用进对话；**批注能力已整体移除（界面 + 数据 + 工具 + 客户端残留）**，`design.json` 里不再有 `comments[]`。
 
 > **命名说明**：包名与插件显示名是 `dsh-design-agent` / 「设计预览」（早期叫 dsh-design-canvas，那会儿是无限画布形态，后来砍了）。写通道路径 `/design-canvas/api`、用户工作区里的 `.design/` 目录，以及两个历史文件名（`feature-dsh-design-canvas.yaml` / `verification-feature-dsh-design-canvas.md`）**保持不变**——前两个是冻结契约与真实目录，后两个是历史记录的稳定 id。
 
@@ -61,7 +61,7 @@ plugin_manager  action: install_bundle  target: <本仓库绝对路径>
 
 ```
 <workspace>/.design/
-├── design.json     # selection / tokens 镜像 / frames[] / comments[]
+├── design.json     # selection / tokens 镜像 / frames[]
 ├── tokens.css      # 选中的设计预设（逐字拷贝，不改变量名）
 └── frames/*.html   # 每屏一个自包含 HTML（样式内联、零外链）
 ```

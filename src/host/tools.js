@@ -63,7 +63,6 @@ const STATUS_OUTPUT = {
     project: { type: 'object', description: '完整设计工程（design.json 归一化结果）' },
     frames: { type: 'array', items: { type: 'object' }, description: '所有 frame' },
     tokens: { type: 'object', description: 'tokens.css 的只读镜像' },
-    comments: { type: 'array', items: { type: 'object' }, description: '批注（含原文与 frameId）' },
     selection: { type: 'object', description: '用户当前选中态' },
     exists: { type: 'boolean', description: 'design.json 是否已存在' },
     recovered: { type: 'boolean', description: '本次是否因 design.json 非法而回退空工程' },
@@ -103,30 +102,20 @@ export function registerDesignTools(ctx) {
     ctx.tools.register({
       name: TOOL_STATUS,
       description:
-        '读取设计画布的当前状态：设计工程、所有 frame（id/name/尺寸/坐标）、token 镜像、用户批注、当前选中项。无副作用。' +
-        '用户会在画布上留批注，**改设计前必须先调用本工具**：未处理批注在 comments 里（resolved=false），带批注原文与所属 frameId。' +
+        '读取设计画布的当前状态：设计工程、所有 frame（id/name/尺寸/坐标）、token 镜像、当前选中项。无副作用。' +
+        '**改设计前先调用本工具**看清现有 frame 与 token。' +
         '只想看某一屏的 HTML 时，直接用 read 工具读 .design/frames/<id>.html。',
       parameters: {
         type: 'object',
         additionalProperties: false,
-        properties: {
-          includeResolved: {
-            type: 'boolean',
-            description: '是否连已处理批注一起返回，默认 false（只给未处理的）。',
-          },
-        },
+        properties: {},
       },
       output: { schema: STATUS_OUTPUT, render: renderJson },
-      execute(args, exec) {
+      execute(_args, exec) {
         const cwd = resolveCwd(exec);
-        return readStatus(cwd)
-          .then((status) => {
-            if (args.includeResolved === true) return status;
-            return { ...status, comments: status.comments.filter((comment) => !comment.resolved) };
-          })
-          .catch((error) => {
-            throw toToolFailure(error);
-          });
+        return readStatus(cwd).catch((error) => {
+          throw toToolFailure(error);
+        });
       },
     }),
   );
@@ -136,7 +125,7 @@ export function registerDesignTools(ctx) {
       name: TOOL_FRAME_WRITE,
       description:
         '创建或覆盖画布上的一屏：写入 .design/frames/<id>.html，并在 design.json 里登记/更新该 frame。' +
-        '**动手前先调用 design_status 读未处理批注**——用户会直接在画布上留意见，不看就改等于白改。' +
+        '**动手前先调用 design_status** 看清已有 frame 与 token，避免重复建屏或写自创颜色。' +
         '只改某一屏的页面内容时，**也可以直接用 read/write/edit 编辑 .design/frames/<id>.html**（画布会监听文件变更自动刷新），' +
         '但新增一屏、改尺寸或改坐标请用本工具，这样 design.json 才同步。' +
         `单屏 HTML 必须自包含（样式内联），0 字节或超过 ${MAX_FRAME_BYTES} 字节（2MB）会被拒绝。`,
@@ -186,9 +175,9 @@ export function registerDesignTools(ctx) {
     ctx.tools.register({
       name: TOOL_CANVAS_APPLY,
       description:
-        '对画布应用一组操作（新增/移动/改尺寸/重命名/删除 frame、切换 token 预设、加批注/标记批注已处理、写视口、写选中态）。' +
-        '任一操作非法则整批拒绝、不做部分应用。用户批注要先 design_status 读出来再改。' +
-        '可用 op：add_frame | move_frame | resize_frame | rename_frame | delete_frame | switch_tokens | add_comment | resolve_comment | set_viewport | select。',
+        '对画布应用一组操作（新增/移动/改尺寸/重命名/删除 frame、切换 token 预设、写视口、写选中态）。' +
+        '任一操作非法则整批拒绝、不做部分应用。' +
+        '可用 op：add_frame | move_frame | resize_frame | rename_frame | delete_frame | switch_tokens | set_viewport | select。',
       parameters: {
         type: 'object',
         additionalProperties: false,
@@ -211,15 +200,13 @@ export function registerDesignTools(ctx) {
                     'rename_frame',
                     'delete_frame',
                     'switch_tokens',
-                    'add_comment',
-                    'resolve_comment',
                     'set_viewport',
                     'select',
                   ],
                   description: '操作类型。',
                 },
                 id: { type: 'string', description: 'frame id（move/resize/rename/delete 必填）。' },
-                frameId: { type: 'string', description: 'frame id（add_comment 必填）。' },
+                frameId: { type: 'string', description: 'frame id（select 用）。' },
                 name: { type: 'string', description: 'frame 名称（add_frame/rename_frame 用）。' },
                 html: { type: 'string', description: 'add_frame 的自包含 HTML。' },
                 template: { type: 'string', description: 'add_frame 套用 design-system/templates 里的模板 id（与 html 二选一）。' },
@@ -229,10 +216,7 @@ export function registerDesignTools(ctx) {
                 y: { type: 'number' },
                 zoom: { type: 'number', description: 'set_viewport 用。' },
                 preset: { type: 'string', description: 'switch_tokens 的预设 id。' },
-                text: { type: 'string', description: 'add_comment 的批注原文。' },
-                target: { type: 'string', description: 'add_comment 指向的元素选择器（可选）。' },
-                resolved: { type: 'boolean', description: 'resolve_comment 用，默认 true。' },
-                commentId: { type: 'string', description: 'select 用。' },
+
               },
             },
           },

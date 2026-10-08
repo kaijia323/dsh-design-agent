@@ -57,7 +57,7 @@
 目标目录：{target}［未指定则按第 4 步推断］
 
 按顺序做，不要跳步：
-1. 调用 design_status，确认该 frame 仍然存在，并读走它名下所有未处理的批注——批注里的修改意见必须体现在生成代码里。
+1. 调用 design_status，确认该 frame 仍然存在；落地依据就是它的 HTML 与 token（第 2 步读全文）。
 2. read 上面那个文件全文，再 read .design/tokens.css（这两个文件只读，不要修改）。
 3. 探测项目技术栈：先读 package.json 的 dependencies/devDependencies，再看 src/ 的现有目录与一个已有组件的写法，**跟随现有约定**（文件后缀、CSS 方案、命名风格、导入别名）。
    没有任何可识别技术栈时，默认 React + TypeScript 函数组件 + 同目录 CSS Module。
@@ -105,7 +105,7 @@
 | T2（host） | 注册 `design-handoff` session command；校验 frame 存在；投递第 3 节指令；错误可读 |
 | T3（客户端） | 画布「落地到项目」按钮；调用命令通道；失败时展示 Plan B 复制卡片 |
 | T4（本文档） | 指令模板、技术栈推断规则、降级方案与 follow_ups 口径 |
-| agent（systemPrompt） | 按 `prompts/design-conventions.md` 第 8 节与本文档执行 |
+| agent（systemPrompt） | 按 `prompts/design-conventions.md` 第 7 节与本文档执行 |
 
 ## 7. follow_ups 口径
 

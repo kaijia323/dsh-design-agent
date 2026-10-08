@@ -147,13 +147,15 @@ async function checkDataLayer() {
       cwd,
       [
         { op: 'add_frame', id: 'second', name: '第二屏', html: '<p>2</p>', width: 800, height: 600, x: 100, y: 100 },
-        { op: 'add_comment', frameId: 'second', text: '自检批注', x: 1, y: 2 },
+        { op: 'rename_frame', id: 'second', name: '第二屏改名' },
         { op: 'set_viewport', x: -10, y: -20, zoom: 0.8 },
       ],
       'user',
     );
-    line(`  ✓ applyCanvasOps → applied=${design.frames.length} frame / ${design.comments.length} 批注`);
+    line(`  ✓ applyCanvasOps → applied=${design.frames.length} frame，第二屏改名后 name=${design.frames[1].name}`);
     if (design.viewport.zoom !== 0.8) throw new Error('viewport 未写入');
+    if (design.frames[1].name !== '第二屏改名') throw new Error('rename_frame 未写入');
+    if ('comments' in design) throw new Error('design.json 里不该再有 comments 字段');
 
     const status = await readStatus(cwd);
     line(`  ✓ readStatus → ${status.frames.length} frame / tokens 镜像 ${Object.keys(status.tokens).length} 个`);

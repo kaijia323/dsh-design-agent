@@ -231,7 +231,7 @@ describe('只读目录（AC12）', () => {
 });
 
 describe('画布操作 applyCanvasOps', () => {
-  it('新增/移动/改尺寸/重命名/批注/选中/视口 一次跑通', async () => {
+  it('新增/移动/改尺寸/重命名/选中/视口 一次跑通', async () => {
     const cwd = await freshWorkspace('ops');
     const { applied, design } = await applyCanvasOps(
       cwd,
@@ -240,7 +240,6 @@ describe('画布操作 applyCanvasOps', () => {
         { op: 'move_frame', id: 'frame-1', x: 640, y: 120 },
         { op: 'resize_frame', id: 'frame-1', width: 1440, height: 1000 },
         { op: 'rename_frame', id: 'frame-1', name: '订单列表页' },
-        { op: 'add_comment', frameId: 'frame-1', text: '这个按钮太土了', x: 100, y: 200 },
         { op: 'select', frameId: 'frame-1' },
         { op: 'set_viewport', x: -100, y: -50, zoom: 0.75 },
       ],
@@ -252,7 +251,6 @@ describe('画布操作 applyCanvasOps', () => {
       'move_frame:frame-1',
       'resize_frame:frame-1',
       'rename_frame:frame-1',
-      'add_comment:comment-1',
       'select',
       'set_viewport',
     ]);
@@ -262,10 +260,7 @@ describe('画布操作 applyCanvasOps', () => {
     assert.equal(frame.width, 1440);
     assert.equal(frame.name, '订单列表页');
     assert.equal(frame.status, 'draft');
-    assert.equal(design.comments.length, 1);
-    assert.equal(design.comments[0].text, '这个按钮太土了'); // AC8：批注原文
-    assert.equal(design.comments[0].frameId, 'frame-1'); // AC8：所属 frameId
-    assert.equal(design.comments[0].resolved, false);
+    assert.equal('comments' in design, false);
     assert.equal(design.selection.frameId, 'frame-1');
     assert.deepEqual(design.viewport, { x: -100, y: -50, zoom: 0.75 });
 
@@ -320,40 +315,37 @@ describe('画布操作 applyCanvasOps', () => {
     );
   });
 
-  it('删除 frame 同时删文件与它的批注', async () => {
+  it('删除 frame 同时删掉它的文件', async () => {
     const cwd = await freshWorkspace('delete-frame');
     await applyCanvasOps(
       cwd,
-      [
-        { op: 'add_frame', id: 'temp', name: '临时', html: '<p>t</p>', width: 10, height: 10 },
-        { op: 'add_comment', frameId: 'temp', text: '删掉', x: 0, y: 0 },
-      ],
+      [{ op: 'add_frame', id: 'temp', name: '临时', html: '<p>t</p>', width: 10, height: 10 }],
       'user',
     );
     const { design } = await applyCanvasOps(cwd, [{ op: 'delete_frame', id: 'temp' }], 'user');
     assert.equal(design.frames.length, 0);
-    assert.equal(design.comments.length, 0);
     const entries = await readdir(join(cwd, '.design', 'frames'));
     assert.deepEqual(entries, []);
   });
 
-  it('resolve_comment 标记已处理（AC8 闭环后半段）', async () => {
-    const cwd = await freshWorkspace('resolve-comment');
+  it('已移除的批注 op 必须被整批拒绝（EUNKNOWN），不留半成品', async () => {
+    const cwd = await freshWorkspace('retired-comment-ops');
     await applyCanvasOps(
       cwd,
-      [
-        { op: 'add_frame', id: 'f', name: 'F', html: '<p>f</p>', width: 10, height: 10 },
-        { op: 'add_comment', id: 'c1', frameId: 'f', text: '太土了', x: 1, y: 1 },
-      ],
+      [{ op: 'add_frame', id: 'f', name: 'F', html: '<p>f</p>', width: 10, height: 10 }],
       'user',
     );
-    const { design } = await applyCanvasOps(cwd, [{ op: 'resolve_comment', id: 'c1' }], 'agent');
-    assert.equal(design.comments[0].resolved, true);
+    const before = await readFile(join(cwd, '.design', 'design.json'), 'utf8');
 
-    // 只读返回未处理批注
-    const status = await readStatus(cwd);
-    assert.equal(status.comments.length, 1);
-    assert.equal(status.comments.filter((comment) => !comment.resolved).length, 0);
+    for (const op of ['add_comment', 'resolve_comment']) {
+      await assertDesignError(
+        applyCanvasOps(cwd, [{ op, id: 'c1', frameId: 'f', text: '太土了' }], 'agent'),
+        ERROR_CODES.UNKNOWN,
+      );
+    }
+
+    const after = await readFile(join(cwd, '.design', 'design.json'), 'utf8');
+    assert.equal(after, before, '被拒的 op 不应改动 design.json');
   });
 });
 

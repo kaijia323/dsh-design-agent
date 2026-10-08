@@ -186,16 +186,16 @@ describe('index.js 的导出形态与注册结果', () => {
     }
   });
 
-  it('工具描述写清了两件必须说的事：可直接改 frame 文件、批注先 design_status', () => {
+  it('工具描述写清了两件必须说的事：可直接改 frame 文件、动手前先 design_status', () => {
     const { tools } = mountHost();
     const status = tools.find((tool) => tool.name === 'design_status');
     const frameWrite = tools.find((tool) => tool.name === 'design_frame_write');
-    assert.match(status.description, /批注/u);
+    assert.match(status.description, /frame/u);
     assert.match(frameWrite.description, /read\/write\/edit/u);
     assert.match(frameWrite.description, /\.design\/frames\//u);
-    // 用户会直接在画布上留意见，所以每个改设计的工具都要提醒先读未处理批注。
     assert.match(frameWrite.description, /design_status/u);
-    assert.match(tools.find((tool) => tool.name === 'design_canvas_apply').description, /design_status/u);
+    // 批注能力已整体移除：工具契约里不该再出现相关字眼。
+    for (const tool of tools) assert.doesNotMatch(tool.description, /批注/u);
   });
 
   it('dispose 全调一遍不抛错（卸载路径也要干净）', () => {
@@ -235,7 +235,7 @@ describe('工具 execute 端到端（真实写文件）', () => {
     assert.equal(readBack.project.version, 2);
   });
 
-  it('design_canvas_apply 用工具写批注，design_status 能读出原文与 frameId（AC8）', async () => {
+  it('design_canvas_apply 建屏 + 选中，design_status 能读回来', async () => {
     const { tools } = mountHost();
     const canvasApply = tools.find((tool) => tool.name === 'design_canvas_apply');
     const status = tools.find((tool) => tool.name === 'design_status');
@@ -245,19 +245,19 @@ describe('工具 execute 端到端（真实写文件）', () => {
       {
         ops: [
           { op: 'add_frame', id: 'orders-detail', name: '订单详情', html: '<h1>detail</h1>', width: 1280, height: 900 },
-          { op: 'add_comment', frameId: 'orders-detail', text: '这个按钮太土了', x: 12, y: 34 },
           { op: 'select', frameId: 'orders-detail' },
         ],
       },
       runExec,
     );
-    assert.deepEqual(applied.applied, ['add_frame:orders-detail', 'add_comment:comment-1', 'select']);
+    assert.deepEqual(applied.applied, ['add_frame:orders-detail', 'select']);
 
     const readBack = await status.execute({}, runExec);
-    assert.equal(readBack.comments.length, 1);
-    assert.equal(readBack.comments[0].text, '这个按钮太土了');
-    assert.equal(readBack.comments[0].frameId, 'orders-detail');
+    // 注意：同一个 describe 里的用例共享 workspace，别断言总数（与执行顺序耦合）。
+    assert.ok(readBack.frames.some((frame) => frame.id === 'orders-detail'), '新建的 frame 应能读回');
     assert.equal(readBack.selection.frameId, 'orders-detail');
+    // 批注能力已整体移除：状态里不再有 comments 键。
+    assert.equal('comments' in readBack, false);
   });
 
   it('工具失败时抛出带错误码与路径的中文原因（AC12）', async () => {

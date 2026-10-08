@@ -104,7 +104,6 @@ export function emptyProject() {
     viewport: { x: 0, y: 0, zoom: 1 },
     tokens: {},
     frames: [],
-    comments: [],
     selection: {},
   };
 }
@@ -181,35 +180,11 @@ export function normalizeProject(raw) {
     }
   }
 
-  /** @type {import('./types.js').Comment[]} */
-  const comments = [];
-  const seenCommentIds = new Set();
-  if (Array.isArray(raw.comments)) {
-    for (const candidate of raw.comments) {
-      if (!isPlainObject(candidate)) continue;
-      if (typeof candidate.id !== 'string' || seenCommentIds.has(candidate.id)) continue;
-      seenCommentIds.add(candidate.id);
-      comments.push({
-        id: candidate.id,
-        frameId: str(candidate.frameId, ''),
-        ...(typeof candidate.target === 'string' ? { target: candidate.target } : {}),
-        text: str(candidate.text, ''),
-        x: num(candidate.x, 0),
-        y: num(candidate.y, 0),
-        resolved: candidate.resolved === true,
-        createdAt: str(candidate.createdAt, new Date(0).toISOString()),
-      });
-    }
-  }
-
   const selectionRaw = isPlainObject(raw.selection) ? raw.selection : {};
   /** @type {import('./types.js').DesignProject['selection']} */
   const selection = {};
   if (typeof selectionRaw.frameId === 'string' && seenFrameIds.has(selectionRaw.frameId)) {
     selection.frameId = selectionRaw.frameId;
-  }
-  if (typeof selectionRaw.commentId === 'string' && seenCommentIds.has(selectionRaw.commentId)) {
-    selection.commentId = selectionRaw.commentId;
   }
   if (typeof selectionRaw.updatedAt === 'string') selection.updatedAt = selectionRaw.updatedAt;
 
@@ -222,7 +197,6 @@ export function normalizeProject(raw) {
     },
     tokens,
     frames,
-    comments,
     selection,
     ...(typeof raw.updatedAt === 'string' ? { updatedAt: raw.updatedAt } : {}),
     ...(raw.updatedBy === 'user' || raw.updatedBy === 'agent' || raw.updatedBy === 'plugin'
@@ -419,11 +393,6 @@ export async function readStatus(cwd) {
     project,
     frames: project.frames,
     tokens: project.tokens,
-    comments: project.comments.map((comment) => ({
-      ...comment,
-      // 未处理批注原文 + 所属 frameId：AC8 直接看这两个字段。
-      frameName: project.frames.find((frame) => frame.id === comment.frameId)?.name ?? '',
-    })),
     selection: project.selection,
     exists,
     recovered,
@@ -510,16 +479,6 @@ export function makeFrameId(project) {
     if (!used.has(candidate)) return candidate;
   }
   return `frame-${Date.now()}`;
-}
-
-/** 生成不与现有批注冲突的 id。 */
-function makeCommentId(project) {
-  const used = new Set(project.comments.map((comment) => comment.id));
-  for (let index = 1; index <= 10000; index += 1) {
-    const candidate = `comment-${index}`;
-    if (!used.has(candidate)) return candidate;
-  }
-  return `comment-${Date.now()}`;
 }
 
 /**
@@ -624,13 +583,6 @@ function normalizeOp(raw) {
     case 'switch_tokens':
       needsString('preset');
       break;
-    case 'add_comment':
-      needsString('frameId');
-      needsString('text');
-      break;
-    case 'resolve_comment':
-      needsString('id');
-      break;
     default:
       break;
   }
@@ -728,7 +680,6 @@ export async function applyCanvasOps(cwd, ops, source = 'user') {
       case 'delete_frame': {
         const frame = requireFrame(String(op.id));
         project.frames = project.frames.filter((candidate) => candidate.id !== frame.id);
-        project.comments = project.comments.filter((comment) => comment.frameId !== frame.id);
         if (project.selection.frameId === frame.id) delete project.selection.frameId;
         frameWrites.push({ path: join(paths.framesDir, `${frame.id}.html`), html: null });
         applied.push(`delete_frame:${frame.id}`);
@@ -755,32 +706,6 @@ export async function applyCanvasOps(cwd, ops, source = 'user') {
         applied.push(`switch_tokens:${preset.id}`);
         break;
       }
-      case 'add_comment': {
-        const frameId = String(op.frameId);
-        requireFrame(frameId);
-        const comment = {
-          id: op.id === undefined || op.id === '' ? makeCommentId(project) : String(op.id),
-          frameId,
-          ...(typeof op.target === 'string' ? { target: op.target } : {}),
-          text: String(op.text),
-          x: num(op.x, 0),
-          y: num(op.y, 0),
-          resolved: false,
-          createdAt: new Date().toISOString(),
-        };
-        project.comments.push(comment);
-        applied.push(`add_comment:${comment.id}`);
-        break;
-      }
-      case 'resolve_comment': {
-        const comment = project.comments.find((candidate) => candidate.id === String(op.id));
-        if (comment === undefined) {
-          throw new DesignError(ERROR_CODES.UNKNOWN, `批注不存在：${op.id}`);
-        }
-        comment.resolved = op.resolved === undefined ? true : op.resolved === true;
-        applied.push(`resolve_comment:${comment.id}`);
-        break;
-      }
       case 'set_viewport': {
         project.viewport = {
           x: num(op.x, project.viewport.x),
@@ -794,7 +719,6 @@ export async function applyCanvasOps(cwd, ops, source = 'user') {
         /** @type {import('./types.js').DesignProject['selection']} */
         const selection = {};
         if (typeof op.frameId === 'string' && op.frameId !== '') selection.frameId = assertFrameId(op.frameId);
-        if (typeof op.commentId === 'string' && op.commentId !== '') selection.commentId = op.commentId;
         selection.updatedAt = new Date().toISOString();
         project.selection = selection;
         applied.push('select');

@@ -1,3 +1,7 @@
+# 历史规格，保留当年的验收结论不作修改。
+# 注意：本文里的 comments[] 字段、add_comment / resolve_comment 两个 op、design_status 返回 comments[]
+# 描述的是 v8 之前的形态；v8 起批注能力已整体移除（界面 + 数据 + 工具 + 客户端残留），
+# 现行契约见 docs/architecture.md 与源码 src/host/。
 spec:
   type: feature
   name: DSH 设计预览插件（对话驱动 UI 设计 → 前端代码）
