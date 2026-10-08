@@ -58,7 +58,7 @@ window.__ModuleLoader__.load({
       emptyHint: '在对话里说一句，例如「设计一个 SaaS 后台的订单列表页」，DSH 会帮你生成第一屏。', emptyReload: '重新读取工程', loading: '正在读取 .design 工程…',
       noSession: '当前没有可用的会话，无法定位 .design 工程。', frameEmpty: '这一帧是空文件', frameMissing: '这一帧还没有文件',
       frameUnreadable: '这一帧读不出来', frameTooLarge: '内容过大，已拒绝渲染', frameTimeout: '渲染超时：帧内脚本可能卡死了',
-      reloadFrame: '重新加载这一屏', pickHint: '在预览里点一个元素，可以改它的属性，或就它写一条批注。', props: '元素属性',
+      reloadFrame: '重新加载这一屏', fitWidth: '适应宽度', pickHint: '在预览里点一个元素，可以改它的属性，或就它写一条批注。', props: '元素属性',
       fieldText: '文字', fieldColor: '文字颜色', fieldBackground: '背景色',
       fieldFontSize: '字号', fieldPadding: '内边距', fieldMargin: '外边距',
       commentNew: '就这个元素写批注', commentPlaceholder: '例如：这个按钮太土了', commentSave: '保存批注',
@@ -157,7 +157,7 @@ window.__ModuleLoader__.load({
       '(function(){',
       'var CMD="__dshDesignCmd";',
       'function post(m){ try{ parent.postMessage(Object.assign({__dshDesign:1}, m), "*"); }catch(e){} }',
-      'var selected=null, hovered=null, hoverOutline=null, comments=[], layer=null;',
+      'var selected=null, hovered=null, hoverOutline=null, comments=[], layer=null, badgeScale=1;',
       'function cssPath(el){',
       '  var parts=[];',
       '  while(el && el.nodeType===1 && el!==document.documentElement){',
@@ -197,9 +197,11 @@ window.__ModuleLoader__.load({
       '    var b = document.createElement("button");',
       '    b.type = "button"; b.textContent = String(i+1);',
       '    b.setAttribute("data-dsh-comment-mark", c.id);',
-      '    b.style.cssText = "position:fixed;pointer-events:auto;cursor:pointer;width:18px;height:18px;border-radius:9px;border:none;background:#d97a45;color:#fff;font:600 11px/18px system-ui;text-align:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.35)";',
-      '    b.style.left = Math.max(2, r.right - 9) + "px";',
-      '    b.style.top = Math.max(2, r.top - 9) + "px";',
+      '    var k = 1 / (badgeScale > 0 ? badgeScale : 1);',
+      '    b.style.cssText = "position:fixed;pointer-events:auto;cursor:pointer;border:none;background:#d97a45;color:#fff;font-weight:600;font-family:system-ui;text-align:center;padding:0;box-shadow:0 1px 4px rgba(0,0,0,.35)"',
+      '      + ";width:" + (18*k) + "px;height:" + (18*k) + "px;border-radius:" + (9*k) + "px;font-size:" + (11*k) + "px;line-height:" + (18*k) + "px";',
+      '    b.style.left = Math.max(2, r.right - 9*k) + "px";',
+      '    b.style.top = Math.max(2, r.top - 9*k) + "px";',
       '    b.onclick = (function(id){ return function(ev){ ev.preventDefault(); ev.stopPropagation(); post({ type:"commentClick", id:id }); }; })(c.id);',
       '    L.appendChild(b); anchored.push(c.id);',
       '  }',
@@ -231,6 +233,7 @@ window.__ModuleLoader__.load({
       '  var d = ev.data;',
       '  if(!d || d[CMD]!==true) return;',
       '  if(d.cmd==="setComments"){ comments = Array.isArray(d.comments) ? d.comments : []; layoutComments(); return; }',
+      '  if(d.cmd==="setBadgeScale"){ badgeScale = Number(d.scale) > 0 ? Number(d.scale) : 1; layoutComments(); return; }',
       '  if(d.cmd==="selectPath"){',
       '    var found=null; try{ found=document.querySelector(d.value); }catch(e){ found=null; }',
       '    if(found){ selected=found; post({ type:"select", info: describe(selected) }); }',
@@ -777,7 +780,11 @@ window.__ModuleLoader__.load({
     function PreviewFrame(props) {
       const { frame, doc, reloadToken, onReload, onSelectElement, onElementChanged, onCommentClick, onAnchors, registerCommand, t } = props;
       const iframeRef = React.useRef(null);
+      /** 被测量的滚动容器：它的 clientWidth 决定缩放比。 */
+      const hostRef = React.useRef(null);
       const [status, setStatus] = React.useState('loading');
+      /** 视觉缩放比。iframe 内部的**布局尺寸始终等于声明尺寸**，缩放只发生在这层变换上。 */
+      const [scale, setScale] = React.useState(1);
 
       const html = doc && typeof doc.text === 'string' ? doc.text : '';
       const bytes = doc && typeof doc.bytes === 'number' ? doc.bytes : byteLength(html);
@@ -786,6 +793,33 @@ window.__ModuleLoader__.load({
       const readError = doc && typeof doc.error === 'string' ? doc.error : null;
       const isEmpty = !tooLarge && !missing && !readError && html.trim().length === 0;
       const renderable = !tooLarge && !missing && !readError && !isEmpty;
+
+      /**
+       * 按声明尺寸布局、按面板宽度等比缩小。
+       *
+       * 关键点：iframe 的 width/height 一律等于 frame 的**声明值**（1440 就是 1440），
+       * 所以帧内文档的布局尺寸与 design.json 一致（AC3）；缩放只是外层的一层 CSS 变换，
+       * 不参与布局。`min(1, …)` 表示只缩不放，避免把小屏放大糊掉。
+       * 用 ResizeObserver 跟随面板宽度（用户拖右侧栏宽度时实时变）。
+       */
+      React.useEffect(() => {
+        const host = hostRef.current;
+        if (!host || !renderable) return undefined;
+        const measure = () => {
+          // clientWidth 已排除滚动条；再留 2px，避免自己撑出横向滚动条。
+          const available = host.clientWidth - 2;
+          const next = Math.min(1, available > 0 ? available / frame.width : 1);
+          setScale((current) => (Math.abs(current - next) < 0.001 ? current : next));
+        };
+        measure();
+        if (typeof ResizeObserver === 'function') {
+          const observer = new ResizeObserver(measure);
+          observer.observe(host);
+          return () => observer.disconnect();
+        }
+        window.addEventListener('resize', measure);
+        return () => window.removeEventListener('resize', measure);
+      }, [frame.width, renderable]);
 
       // 每次重新加载都重置生命周期，并给死循环留一个超时出口。
       React.useEffect(() => {
@@ -845,6 +879,14 @@ window.__ModuleLoader__.load({
         return () => registerCommand(frame.id, null);
       }, [frame.id, command, registerCommand]);
 
+      // 把缩放比告诉帧内探针：批注角标按 1/缩放 反向放大，才能在任何缩放下保持屏幕上
+      // 的恒定大小（38% 时若按原尺寸渲染只剩 6.9px，既看不清也点不动）。
+      // 依赖里带上 status：iframe 每次重挂载后探针的 badgeScale 会回到 1，必须重发。
+      React.useEffect(() => {
+        if (!renderable) return;
+        command({ cmd: 'setBadgeScale', scale: scale });
+      }, [scale, renderable, command, status]);
+
       const placeholder = (label, hint) =>
         h(
           'div',
@@ -868,8 +910,18 @@ window.__ModuleLoader__.load({
         body = placeholder(t('frameEmpty'), 'frames/' + frame.id + '.html 是 0 字节。');
       } else {
         body = h(
+          // 外层按缩放后的尺寸占位：缩放是视觉变换，不改变 iframe 的布局盒子，
+          // 所以必须给一个显式尺寸的裁切盒，否则 1440px 的自然宽会撑出横向滚动条。
           'div',
-          { style: { position: 'relative', width: '100%', height: '100%', background: '#fff' } },
+          {
+            style: {
+              position: 'relative',
+              width: Math.round(frame.width * scale) + 'px',
+              height: Math.round(frame.height * scale) + 'px',
+              overflow: 'hidden',
+              background: '#fff',
+            },
+          },
           h('iframe', {
             ref: iframeRef,
             key: frame.id + ':' + reloadToken,
@@ -878,7 +930,16 @@ window.__ModuleLoader__.load({
             // AC10：只给 allow-scripts，永远不要加 allow-same-origin。
             sandbox: 'allow-scripts',
             referrerPolicy: 'no-referrer',
-            style: { display: 'block', width: '100%', height: '100%', border: 'none', background: '#fff' },
+            style: {
+              display: 'block',
+              // 布局尺寸 = 声明尺寸，一分不改（AC3 就靠这个）。
+              width: frame.width + 'px',
+              height: frame.height + 'px',
+              border: 'none',
+              background: '#fff',
+              transform: 'scale(' + scale + ')',
+              transformOrigin: 'top left',
+            },
           }),
           status === 'timeout'
             ? h(
@@ -893,7 +954,33 @@ window.__ModuleLoader__.load({
         );
       }
 
-      return h('div', { 'data-frame-id': frame.id, style: { width: '100%', height: '100%', minHeight: 0, overflow: 'hidden' } }, body);
+      return h(
+        'div',
+        { 'data-frame-id': frame.id, style: { position: 'relative', width: '100%', height: '100%', minHeight: 0, display: 'flex' } },
+        // 滚动与测量都在这层：纵向可滚，横向裁掉，避免自己把宽度量小再触发重排震荡。
+        h('div', { ref: hostRef, style: { flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden' } }, body),
+        // 缩放指示：绝对定位，不参与布局，所以不会反过来影响被测量的宽度。
+        renderable && scale < 0.999
+          ? h(
+              'div',
+              {
+                style: {
+                  position: 'absolute',
+                  right: 8,
+                  bottom: 8,
+                  padding: '2px 7px',
+                  fontSize: 11,
+                  lineHeight: 1.6,
+                  borderRadius: 5,
+                  pointerEvents: 'none',
+                  background: 'rgba(20,20,24,0.78)',
+                  color: '#fff',
+                },
+              },
+              t('fitWidth') + ' · ' + Math.round(scale * 100) + '%',
+            )
+          : null,
+      );
     }
 
     // ------------------------------------------------------------ 元素检查器

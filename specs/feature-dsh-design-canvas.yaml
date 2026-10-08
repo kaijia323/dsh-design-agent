@@ -2,7 +2,7 @@ spec:
   type: feature
   name: DSH 设计预览插件（对话驱动 UI 设计 → 前端代码）
   id: feature-dsh-design-canvas
-  version: 8
+  version: 9
   updated: "2026-10-08"
   status: ready
   blocked_reason: ""
@@ -195,6 +195,7 @@ spec:
     - 客户端为**单文件、无构建步骤**（`client.js`，`window.__ModuleLoader__.load` 格式）；不用 tsdown/TS/打包器；不 require 任何 @deepseek-ai/* 客户端包。
     - 渲染模型生成的 HTML 必须在沙箱 iframe 中，**禁止** allow-same-origin；这是安全红线，不得为任何交互便利而放宽。
     - 预览面板不提供空间编排：不做平移、缩放、坐标、拖动改位置、多屏并排。
+    - "渲染尺寸策略：**iframe 内部的布局尺寸必须等于 frame 的声明尺寸**（声明 1440×900 就按 1440×900 布局，不得按容器宽度重排）；适配面板只在**外层**用 `transform: scale(min(1, 面板宽/声明宽))` 等比缩放，只缩不放，并显示缩放比例。这条是 AC3 的成立前提，也是"用户看到的必须是他选的那个版式"的保证。"
     - "挂载点唯一：只注册右侧栏标签（`sidebarRightTabs` + `sidebar.right.pane.tab`/`.title`，session 级，天然绑定当前工作区）；不注册 `sidebar.panellist` 左侧栏入口，不注册 `main` 主面板座位——避免用户看不出这块设计跟着哪个工作区。"
     - host 层（`index.js` / `src/host/**`）已通过独立验收，本版**不得修改**；`move_frame` / `set_viewport` / frame 的 x/y 保留但 UI 不调用。
     - 只做单向 设计→代码；不实现"代码改动反推回设计"的双向同步。
