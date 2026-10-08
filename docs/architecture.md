@@ -182,3 +182,14 @@ node scripts/post-restart-check.mjs               # 重启后：路由 / 工具 
 - 端到端：GUI `http://127.0.0.1:3080`（`dsh web` 启动时打印的 URL 带一次性 token；直接访问 `/` 会 401，重启后 token 会变）。
 - 独立验收报告：`docs/verification-feature-dsh-design-canvas.md`。
 - 沙箱验证要点：劫持帧的 `window.origin` 应为 `null`；控制台**不得**出现 Chrome 的 `can escape its sandboxing` 警告（出现即说明 `allow-same-origin` 被加上了）。
+
+## 版本控制：`.design/` 该不该提交？
+
+**在用户的项目里：应该提交。** 这是"真源是文件"这条取舍的前提——设计稿进了 git 才能 review、diff、回溯，也才能和代码改动一起被审查。
+
+**在本插件仓库里：不提交，已写进 `.gitignore`。** 因为这里的 `.design/` 是开发与演示数据（还带着验收期留下的测试批注），不是插件源码。
+
+需要留意的两点：
+
+1. **验收时 AC4 的 git 口径（`git status --porcelain` 能看到 `.design/`）是在它"未跟踪但未被忽略"的状态下测的。** 加了忽略之后，同样的命令不再列出它——这**不影响** AC4 的实质（设计是磁盘上的真实文件、内容可 diff、agent 可直接 read/write/edit），只是口径变了。若将来要重跑那条口径，先临时移除 `.gitignore` 里的 `.design/` 一行。
+2. 如果使用者项目里有宽泛的 ignore 规则把 `.design/` 吞掉，那是使用者的选择；插件不会替他改 `.gitignore`，但在 `README.md` 与本节都写明了建议。

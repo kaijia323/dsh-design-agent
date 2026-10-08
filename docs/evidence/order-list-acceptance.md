@@ -37,7 +37,7 @@
 | 服务确实吐的是新版 | `curl -s -o /dev/null -w 'http=%{http_code} bytes=%{size_download}' http://127.0.0.1:7393/.design/frames/order-list.html` | `http=200 bytes=36765`（= 磁盘 sha256 对应字节数） |
 | 渲染 | Playwright MCP：`browser_tabs action=new` → `browser_navigate` → `browser_resize 1440×900` → 再 `browser_navigate` 刷一次 → `browser_take_screenshot`（覆盖同名文件） | 见 §1 |
 | 静态核对 | `python3 docs/evidence/order-list-static-check.py` | `SUMMARY fails=0` |
-| AC9 复核 | 用 SPEC 原文脚本（`specs/feature-order-list-page.yaml` L277–299 逐字复制）跑一遍 | 见 §2.7 |
+| AC9 复核 | 用 SPEC 原文脚本（`docs/evidence/order-list-design-spec.yaml` L277–299 逐字复制）跑一遍 | 见 §2.7 |
 | 关服务 | `job_kill bash-44` + `curl -m 2` / `ss -ltnp` 复核 | 见 §5 末尾 |
 
 浏览器：Playwright MCP（Chromium），视口 1440×900，DPR 1。
@@ -162,7 +162,7 @@ Total messages: 0 (Errors: 0, Warnings: 0)
 
 ### 2.7 AC9 复核（SPEC 原文脚本逐字执行）
 
-脚本来自 `specs/feature-order-list-page.yaml` L277–299（原文复制，未改逻辑），实跑输出：
+脚本来自 `docs/evidence/order-list-design-spec.yaml` L277–299（原文复制，未改逻辑），实跑输出：
 
 ```
 表头 ['', '订单号', '客户', '订阅内容', '金额', '支付方式', '下单时间', '状态', '操作']
@@ -253,7 +253,7 @@ getComputedStyle(document.querySelector('.tabs')).backgroundColor    // rgb(238,
 - **不通过项**：无。
 - **未取证项**：无（渲染、控制台、尺寸、行高、溢出、对比度、语义、AC9 均由实跑取得）。
 - **非阻塞观察**：4 条（(a) transparent / (b) 复选框语义 / (c) progressbar 角色 / (d) faint 对比度 3.27:1），在 sha256 `e4aa25b5…` 这版上逐条复核仍然成立。
-- **重复性**：静态检查可重跑 `python3 docs/evidence/order-list-static-check.py`；AC9 脚本见 `specs/feature-order-list-page.yaml` L277–299；渲染取证需重起 `python3 -m http.server 7393`（命令见 §0）。
+- **重复性**：静态检查可重跑 `python3 docs/evidence/order-list-static-check.py`；AC9 脚本见 `docs/evidence/order-list-design-spec.yaml` L277–299；渲染取证需重起 `python3 -m http.server 7393`（命令见 §0）。
 - **服务清理**：取证结束后 `job_kill bash-44`，并用 `curl -m 2` 与 `ss -ltnp | grep 7393` 复核，确认端口已无监听。
 
 **总评：通过，可交付。**（被验版本 sha256 `e4aa25b5c9574dd41323ff9f55d194941817606bbe9bcf22aef18999aecdeec4`，36765 字节）
