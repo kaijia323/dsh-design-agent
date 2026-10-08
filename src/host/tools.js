@@ -8,7 +8,7 @@
  * 工具与画布 HTTP 通道（src/host/http.js）调用的是 design-project.js 里同一批函数，
  * 不存在两套逻辑。
  *
- * @module dsh-design-canvas/host/tools
+ * @module dsh-design-agent/host/tools
  */
 
 import { DesignError, applyCanvasOps, readStatus, writeFrame } from './design-project.js';

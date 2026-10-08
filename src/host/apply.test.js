@@ -11,7 +11,7 @@
  *
  * 运行：`node --test src/host/apply.test.js`
  *
- * @module dsh-design-canvas/host/apply.test
+ * @module dsh-design-agent/host/apply.test
  */
 
 import assert from 'node:assert/strict';
@@ -159,7 +159,7 @@ describe('index.js 的导出形态与注册结果', () => {
     assert.equal(typeof routes[0].handler, 'function');
 
     assert.equal(sections.length, 1);
-    assert.equal(sections[0].name, 'design-canvas/conventions');
+    assert.equal(sections[0].name, 'design-agent/conventions');
     assert.equal(typeof sections[0].order, 'number');
     // text 允许是字符串或 provider；我们用 provider 以便 T4 交付后热替换。
     const text = typeof sections[0].text === 'function' ? sections[0].text({}) : sections[0].text;

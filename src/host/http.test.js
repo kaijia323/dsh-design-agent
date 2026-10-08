@@ -6,7 +6,7 @@
  *
  * 运行：`node --test src/host/http.test.js`
  *
- * @module dsh-design-canvas/host/http.test
+ * @module dsh-design-agent/host/http.test
  */
 
 import assert from 'node:assert/strict';

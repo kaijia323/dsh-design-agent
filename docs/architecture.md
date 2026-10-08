@@ -126,6 +126,8 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 - `dsh-fs-local` 对目录的监听参数是 `{ ignoreInitial: true, depth: 0 }`，**只监听 `.design` 收不到 `.design/frames/*.html` 的变更**。所以刷新用的是"changes 流 + 定期 stat"双保险，两处都要留着。
 - `insertText` 的 span 带 `draftRev`：**capture 与 insert 之间用户只要敲了字，这次插入就会被拒**。这不是 bug，是设计（拒绝比覆盖用户草稿安全），正确处理是重新 capture 重试一次；两次都失败才走可见失败分支。
 
+> **命名说明（2026-10-09）**：包名、客户端模块 id、插件显示名已统一为 `dsh-design-agent` / 「设计预览」，但**写通道路径 `/design-canvas/api` 与 `.design/` 目录名保留不改**——前者是已验收的冻结契约（改它等于让上一轮的验收证据失效），后者是用户工作区里真实存在的目录（改名会破坏所有已有工作区）。同理，`specs/feature-dsh-design-canvas.yaml` 与 `docs/verification-feature-dsh-design-canvas.md` 是**画布形态那一轮**的历史文件名，按 id 稳定性保留。
+
 ## 写通道与安全模型
 
 `POST /design-canvas/api`，请求体 `{ sessionId, method?, ops?, ... }`。

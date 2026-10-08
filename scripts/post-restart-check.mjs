@@ -15,7 +15,7 @@
  * 断言收到 400 + EUNKNOWN + "会话不存在" —— 这已经证明 路由→护栏→解析→agents 查询 整条
  * 链路是活的，且不会写入任何文件；真实会话的读写留给 GUI 侧验证。
  *
- * @module dsh-design-canvas/scripts/post-restart-check
+ * @module dsh-design-agent/scripts/post-restart-check
  */
 
 import { mkdtemp, readFile, rm } from 'node:fs/promises';

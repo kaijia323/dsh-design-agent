@@ -10,7 +10,7 @@
  *    唯一例外是 registry 边界——工具会把 DesignError 抛给工具运行时，由它渲染成失败结果。
  * 4) 非法 JSON 是"可恢复"而非"崩溃"：备份 design.json.bak 后回退空工程（AC11）。
  *
- * @module dsh-design-canvas/host/design-project
+ * @module dsh-design-agent/host/design-project
  */
 
 import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';

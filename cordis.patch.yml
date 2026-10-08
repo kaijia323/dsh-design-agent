@@ -3,4 +3,4 @@
 # the Client half (client.js) renders the canvas into the harness Web UI.
 - insert:
     - id: design-canvas
-      name: '@local/dsh-design-canvas'
+      name: '@local/dsh-design-agent'

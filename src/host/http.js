@@ -11,7 +11,7 @@
  * 安全模型（Lead 硬要求，缺一条不算完成）：route 绕过了 `/api` 的信任栅栏，
  * 所以必须自己补同源护栏，避免任意 localhost 页面 POST 进来写用户工作区文件。
  *
- * @module dsh-design-canvas/host/http
+ * @module dsh-design-agent/host/http
  */
 
 import {

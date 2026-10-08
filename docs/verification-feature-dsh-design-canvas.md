@@ -1,5 +1,7 @@
 # 独立验收报告：DSH 设计画布插件（预览面板形态）
 
+> **改名说明（2026-10-09 补）**：本报告写作时包名与客户端模块 id 是 `@local/dsh-design-canvas`，产品名也是「设计画布」；v9 起统一改名为 `@local/dsh-design-agent` / 「设计预览」。**正文里的旧名字与栈帧是当时的原文，一律保留不改**（改了就成伪造证据）。
+
 - 验收者：teammate-verifier（T5，全程未参与实现）
 - 验收日期：2026-10-08 ~ 2026-10-09（Asia/Shanghai）
 - 验收对象：`specs/feature-dsh-design-canvas.yaml`（v5 形态：聊天 + 右侧栏「设计预览」面板）

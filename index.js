@@ -7,7 +7,7 @@
  *
  * 形态要求（T1 冻结）：只导出 `inject` 与 `apply`，不要混用 service class。
  *
- * @module @local/dsh-design-canvas
+ * @module @local/dsh-design-agent
  */
 
 import { readFile } from 'node:fs/promises';
@@ -59,22 +59,22 @@ export function apply(ctx) {
     return () => {
       active = false;
     };
-  }, 'design-canvas: conventions file');
+  }, 'design-agent: conventions file');
 
   // 设计约定进 systemPrompt。order 取一个靠后的数值，避免插进 harness 核心指令中间。
   ctx.effect(
     () =>
       ctx.systemPrompt.section({
-        name: 'design-canvas/conventions',
+        name: 'design-agent/conventions',
         order: 500,
         text: () => conventions,
       }),
-    'design-canvas: system prompt',
+    'design-agent: system prompt',
   );
 
   // 三个 Agent 工具。
-  ctx.effect(() => registerDesignTools(ctx), 'design-canvas: tools');
+  ctx.effect(() => registerDesignTools(ctx), 'design-agent: tools');
 
   // 画布写通道：与工具共用 design-project.js 的同一批函数。
-  ctx.effect(() => registerDesignRoute(ctx), 'design-canvas: canvas route');
+  ctx.effect(() => registerDesignRoute(ctx), 'design-agent: canvas route');
 }

@@ -4,7 +4,7 @@
  * 运行：`node --test src/host/`
  * 说明：这里用真实临时目录 + 真实文件，不打桩 —— AC11/AC12 说的就是真实文件行为。
  *
- * @module dsh-design-canvas/host/design-project.test
+ * @module dsh-design-agent/host/design-project.test
  */
 
 import assert from 'node:assert/strict';

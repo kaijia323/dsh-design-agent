@@ -4,7 +4,7 @@
  * 这里只有常量和 JSDoc 类型，没有运行时代码。客户端（T3）与验收（T5）以本文件
  * 为准；要改字段名或 op 词表，必须先发消息给 Lead，禁止单方面改动。
  *
- * @module dsh-design-canvas/host/types
+ * @module dsh-design-agent/host/types
  */
 
 /** design.json 当前结构版本。加 selection 后由 1 升到 2。 */
