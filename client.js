@@ -28,8 +28,8 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------- 常量
 
     const NS = 'dsh-design-agent';
-    const TAB_ID = 'design-canvas';
-    const TAB_KIND = 'design-canvas';
+    const TAB_ID = 'design-preview';
+    const TAB_KIND = 'design-preview';
     const API_PATH = '/design-canvas/api';
     const DESIGN_DIR = '.design';
     const DESIGN_JSON = '.design/design.json';
@@ -60,7 +60,7 @@ window.__ModuleLoader__.load({
       frameUnreadable: '这一帧读不出来', frameTooLarge: '内容过大，已拒绝渲染', frameTimeout: '渲染超时：帧内脚本可能卡死了',
       reloadFrame: '重新加载这一屏', fitWidth: '适应宽度',
       refLabel: '最近引用', refCopy: '复制引用', refCopied: '已复制引用',
-      refEmpty: '点一个元素，它的位置信息就会自动引用进对话输入框（还没引用过）。',
+      refEmpty: '点一个元素，它就会变成一个引用胶囊进对话输入框（还没引用过）。',
       refInsertedHint: '已作为引用胶囊插入对话输入框，接着打一句要改什么就行（发送前还能改）。',
       refDegraded: '引用胶囊不可用，已降级为纯文本引用：',
       refFailed: '引用没能插进对话输入框：',
@@ -2032,7 +2032,7 @@ window.__ModuleLoader__.load({
         // 聊天输入框桥：挂在输入框上方的会话级插槽，只做一件事——把这一会话的
         // `inputActions` 登记进 composerInserters。渲染 null，不占地方。
         ctx.slots.inject('conversation.input.dock', () =>
-          ctx.slots.register({ name: 'conversation.input.dock', id: 'design-canvas-composer-bridge' }, (props) =>
+          ctx.slots.register({ name: 'conversation.input.dock', id: 'design-preview-composer-bridge' }, (props) =>
             h(ComposerBridge, {
               sessionId: props.sessionId,
               inputActions: props.inputActions,

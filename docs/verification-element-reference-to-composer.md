@@ -14,6 +14,8 @@
   | v7 纯文本（历史） | `client.js` | `7fb7b8ebadc473b0` | 1821 行；当时相对变更前 = +392 / −272 |
   | 两轮均未改动 | `index.js`、`src/host/**` | — | 契约要求"只改客户端 client.js" |
 
+> **验收之后的改动（改名，行为不变）**：`2c603987bd84c1ef` 之后又有两笔**与功能无关**的提交——`7b8e4af` / `6c4d1a9`（包名与客户端模块 id `@local/dsh-design-canvas` → `dsh-design-agent`、`locale` 插件显示名改成「设计预览」）与紧接的一次 id 对齐（右侧栏标签 id `design-canvas` → `design-preview`、`systemPrompt` 段名 → `design-agent/conventions`、胶囊桥插槽 id、以及空态提示文案一处）。改名后 `client.js` sha256[:16] = **`cdc68197730c9471`**。**本报告的功能结论仍然对应 `2c603987bd84c1ef`**：改名只动标识符与一处文案，插入路径、胶囊结构、codec、降级链一行未改；改名后已实跑 `scripts/post-restart-check.mjs`（路由=ok 工具=3/3 数据层=ok 一把过）并在真实 GUI 复验面板与胶囊仍正常。**写通道 `/design-canvas/api`、`.design/` 目录名与两个历史文件名刻意保留**（冻结契约与真实目录，见 README 与 architecture 的命名说明）。
+
 > **证据目录不在版本库里**：报告里引用的 `.playwright-mcp/ac-evidence/**`（原始 JSON、可复跑脚本、截图、冻结快照）是**本地验收产物**，按仓库卫生约定不纳入版本控制（见 `.gitignore`）；公开仓库里只有报告正文与 `docs/evidence/` 下少数留档文件。要复现请按每节给出的命令与判据自己跑一遍。
 
 > **这份报告有两轮独立复验，别读串**：**§五 = v7 纯文本形态**（当时 7 PASS / 1 无法确认，AC5 失败分支构造不出来）；**§六 = v8 胶囊形态**（现行版本，AC1~AC8 全部 PASS，AC3 的 D7 撤销缺陷已由 T1 修复）。**现行判定一律以 §六 为准**，§五 作为形态演进的历史记录保留。
