@@ -1,8 +1,8 @@
 spec:
   type: feature
-  name: DSH 画布设计插件（对话驱动 UI 设计 → 前端代码）
+  name: DSH 设计预览插件（对话驱动 UI 设计 → 前端代码）
   id: feature-dsh-design-canvas
-  version: 3
+  version: 5
   updated: "2026-10-08"
   status: ready
   blocked_reason: ""
@@ -25,46 +25,62 @@ spec:
       by: lead
       version: 3
       note: 按独立验收者提出的口径问题修正两条 AC：AC4 改为可执行的 git 口径（未跟踪文件对 git diff 不可见，改用 git status --porcelain + git add -N）；AC11 明确 2 MiB = 2,097,152 字节并列出 7 个边界值。另注明 design_status 在 design.json 非法时写 design.json.bak 是唯一允许的写行为。
+    - date: "2026-10-08"
+      from: ready
+      to: ready
+      by: lead
+      version: 4
+      note: 用户看完实际界面后决定砍掉无限画布，产品形态改为「聊天 + 预览面板」。删除空间编排（平移/缩放/坐标/拖动/多屏并排），保留渲染、切屏、就地改元素、元素锚点批注、自动刷新与落地。AC5 由"拖动持久化"重写为"切屏与刷新后恢复",AC2/AC3/AC7/AC8/AC11 措辞由画布改为预览面板。host 层与设计契约层不受影响、已验收部分全部沿用。
+    - date: "2026-10-08"
+      from: ready
+      to: ready
+      by: lead
+      version: 5
+      note: 用户指出"左侧栏是全局的，看不出设计跟着哪个工作区"，要求改为右侧栏选项、点击打开当前工作区的 .design。挂载点收敛为唯一：只注册右侧栏 session 级标签，删除 sidebar.panellist 左侧入口与 main 主面板座位；AC1 重写为"右侧栏入口 + 跟随当前工作区切换 + 左侧栏不得有入口"；constraints 增加"挂载点唯一"约束；并要求 .design/ 首次出现时自动打开该标签。
   related: []
-  goal: 让用户在 DSH 聊天窗口里，通过对话让 agent 在无限画布上以「每屏一个真实 HTML」为单位设计 UI，用户可就地拖拽/批注或继续对话修改，满意后由 agent 把设计落成前端代码——从而把「先设计 UI 再写前端」这条流程搬回 AI 研发链路里。
+  goal: 让用户在 DSH 聊天窗口里，通过对话让 agent 以「每屏一个真实 HTML」为单位设计 UI；用户在右侧预览面板里边聊边看，可切换屏幕、点元素就地改文字/颜色/间距、点元素写批注，满意后由 agent 把设计落成前端代码——从而把「先设计 UI 再写前端」这条流程搬回 AI 研发链路里。
   context: |
     背景与痛点：现在直接让 agent 写前端页面，出来的东西很丑、没设计感。根因不是模型不会写 CSS，而是：
     缺设计契约（token/字号阶梯/间距节奏）、缺参考物、缺自检、缺快速迭代手段（"再往左一点"要用文字来回聊二十轮）。
-    因此本插件不只做画布，第一刀同时交付一套内置设计 token 预设，否则画布只会把丑的东西显示得更清楚。
+    因此本插件第一刀就同时交付一套内置设计 token 预设与设计约定，否则预览只会把丑的东西显示得更清楚。
+
+    **形态决策（v4，重要）**：P0 的第一版实现过"真无限画布"（平移/缩放/多屏并排/拖动改位置）。
+    用户在真实界面里用过之后，明确决定砍掉：**"整个画布都多余，我只要聊天 + 一个预览框"**；
+    随后确认预览框要保留"点元素就地改属性"与"点元素写批注"两项能力（**"上面都要，再加点元素写批注"**）。
+    这个判断与早期调研结论一致——调研者当时也建议不做无限画布，理由是同类产品都收敛到
+    "设计系统 + agent 写真实文件 + 并排预览"；当时被 Lead 以"差异化"为由保留，实测后确认是多做的。
+    成本核对：画布的"无限"部分（相机与坐标换算）约 140 行、拖动约 60 行、并排世界图层约 60 行、
+    世界坐标批注浮层约 150 行。而沙箱渲染、探针、读写通道、变更订阅、错误提示这些**跨形态复用**。
 
     竞品与情报（2026-10-08 调研结论）：
     - Anthropic 的 Claude Design 已是同形态商业产品：聊天 + 画布、就地批注、可直接拖拽改、设计系统、handoff 给 Claude Code。
-    - nexu-io/open-design（Apache-2.0）是开源替代，且把 DSH 当一等公民运行时（`od agent setup deepseek-harness`）；
-      但它没有无限画布，只有单页 HTML + 沙箱 iframe 预览；其自带路线图承认"评论式精修只做了一半""参数调节面板还没实现"。
+    - nexu-io/open-design（Apache-2.0）是开源替代，且把 DSH 当一等公民运行时；它只有单页 HTML + 沙箱 iframe 预览，没有多屏空间编排。
     - 没有任何主流产品把"画布 JSON"当真源：open-design 用 DESIGN.md + 真实文件，Onlook 用代码本身。
     - 设计↔代码双向同步至今无人真正解决（官方 Figma MCP 被批"给的是设计上下文而非可生产代码"）。
-    - tldraw SDK 非开源许可：生产环境需付费，免费 hobby 许可强制带水印 → 本方案自研画布，不引入 tldraw。
+    - tldraw SDK 非开源许可：生产环境需付费，免费 hobby 许可强制带水印 → 不引入。
 
-    本方案的核心取舍（由此得出）：
-    1) 真源=文件（`.design/` 下的 design.json + frames/*.html + tokens.css），画布只负责空间布局、编辑入口与实时同步；不发明新格式。
-    2) 画布上的元素=真实网页（每屏一个自包含 HTML，沙箱 iframe 渲染），不是矢量图形。
+    仍然成立的核心取舍：
+    1) 真源=文件（`.design/` 下的 design.json + frames/*.html + tokens.css），UI 只是渲染与编辑入口，不发明新格式。
+    2) 每一屏=真实网页（自包含 HTML，沙箱 iframe 渲染），不是矢量图形。
     3) 只做单向 设计→代码，不做反向同步。
-    4) 差异化=真无限画布 + 长在 DSH 里（不用开第二个 app）+ 改动与对话进同一个上下文。
+    4) 差异化=长在 DSH 里（不用开第二个 app）+ 改动与对话进同一个上下文 + 设计契约层（反 AI 味清单与自检）。
 
     DSH 扩展点（已用 cordis_inspect_list / cordis_inspect_query 实证）：
-    - 客户端 `main` slot（keyed，"Central panel selected by sidebar entry id"，当前仅 conversation）→ 全屏画布主面板。
-    - 客户端 `sidebar.panellist` slot（list）→ 左侧栏图标，配 `ctx.layout.selectPanel(PANEL_ID)` 切换。
-    - 客户端 `shell.overlay` slot（list，frame 级浮层）→ 同屏浮层画布的备选挂载点。
-    - 客户端 `tool.call.toolview` slot（keyed by 工具名）→ 聊天流内嵌实时预览卡片（P1）。
-    - 客户端已有 Remote 服务 `workspaceFiles`（read/list/stat/changes 流）→ 读文件 + 监听 `.design/` 变更，免自研轮询。
-    - 客户端已有服务 `layout` / `locale` / `slots` / `theme`。
-    - host 侧服务：`tools`（注册 agent 工具）、`systemPrompt`（注入设计约定）、`fs`（读写）、`storage`、`webServer`（如需自有路由）。
-    - 客户端插件包契约（实证自 @deepseek-ai/dsh-client-ui-brand-official 与 dsh-client-ui-plugin-manager）：
-      package.json 里 `"dsh": { "client": { "inject": [...], "platform": "web" } }`，exports["./client"] → 打包产物；
-      产物形如 `window.__ModuleLoader__.load({ id, factory: (require) => {...; exports.apply; exports.inject} })`；
-      主面板注册范式（照抄 plugin-manager）：`ctx.slots.inject("main", function*(){ yield ctx.slots.register({name:"main", key:PANEL_ID, ...}, Page); })`
-      + `ctx.slots.inject("sidebar.panellist", () => ctx.slots.register({name:"sidebar.panellist", id:PANEL_ID, order, label}, Icon))`。
+    - （v5 起不使用）客户端 `main` slot 与 `sidebar.panellist` slot：曾被用作"左侧栏入口 + 全屏主面板"，
+      但左侧栏是全局的、用户看不出设计跟着哪个工作区，已移除。放大视图改走右侧栏的 fullscreen。
+    - 客户端 `sidebarRightTabs.register` + `sidebar.right.pane.tab` / `.title` + `ctx.layout.openRightbar(track=true)` → 预览面板停靠右侧栏，边聊边看（AC2 的实现路线，已实测）。
+    - 客户端已有 Remote 服务 `workspaceFiles`：`read(sessionId, path, range, signal)` / `stat` / `list` / `changes(sessionId, path, signal)`（**只读，无 workspaceRoot 参数**）。
+      注意：`dsh-fs-local` 对目录的监听是 `{ignoreInitial:true, depth:0}`，**监听 `.design` 收不到 `.design/frames/*.html` 的变更**，所以实现用 changes 流 + 定期 stat 轮询双保险。
+    - host 侧服务：`tools` / `systemPrompt` / `webServer` / `agents`。
+    - 客户端插件包契约：`package.json` 的 `dsh.client` + exports["./client"]；产物形如
+      `window.__ModuleLoader__.load({ id, factory: (require) => { ...; exports.apply; exports.inject } })`；无构建步骤。
   assumptions:
-    - 本仓库是全新空目录，从零搭建；不 fork、不修改 DSH 自身代码，只新增一个独立插件包。
-    - DSH 运行在 127.0.0.1:3080，profile 为 web；插件以本地包方式安装进该 profile 后即可在 GUI 中生效。
-    - 设计工程数据放在当前工作区（session cwd）下的 `.design/`，可进 git、可 diff、可被 agent 直接 read/write/edit。
-    - 每屏 HTML 自包含（样式与 token 内联），避免沙箱 iframe 里的相对路径/跨文件依赖问题。
-    - agent 修改页面内容优先复用其原生 read/write/edit 能力操作 `.design/frames/*.html`，设计专用工具只做"画布状态读写 + 广播刷新 + 校验"，不重复造文件编辑能力。
+    - 本仓库为独立插件包，不 fork、不修改 DSH 自身代码。
+    - DSH 运行在 127.0.0.1:3080，profile 为 web；插件以本地目录 link 方式安装。
+    - "替换已安装的插件包必须重启 `dsh web` 才会加载新的 host 模块代（Node ESM 缓存；禁用/启用、卸载重装都无效）。client 半刷新页面即可。"
+    - 设计工程数据放在当前工作区（session cwd）下的 `.design/`，可进 git、可被 agent 直接 read/write/edit。
+    - 每屏 HTML 自包含（样式与 token 内联），避免沙箱 iframe 里的相对路径依赖。
+    - agent 改页面内容优先复用原生 read/write/edit 操作 `.design/frames/*.html`；设计工具只做"工程状态读写 + 落盘 + 校验"，不重复造文件编辑能力。
   blocking_questions:
     - q: 这个仓库的定位是"DSH 原生插件主打真无限画布"、"借力 OpenDesign 只补画布层"，还是"先自用不出圈"？
       answered: true
@@ -78,6 +94,14 @@ spec:
       answered: true
       asked_at: "2026-10-08"
       answer: "窄闭环：对话 → 画布出 1~3 屏 → 就地和聊天改 → 落成代码（推荐）"
+    - q: （v4 追加）用过之后，无限画布到底要不要留？
+      answered: true
+      asked_at: "2026-10-08"
+      answer: "整个画布都多余，我只要聊天 + 一个预览框"
+    - q: （v4 追加）预览框做到哪一步？
+      answered: true
+      asked_at: "2026-10-08"
+      answer: "上面都要，再加「点元素写批注」（即：渲染 + 切屏 + 自动刷新 + 落地按钮 + 点元素就地改文字/颜色/间距 + 点元素写批注）"
   open_questions:
     - q: 设计工程文件放在工作区 `.design/` 目录是否合适（会不会污染用户仓库）？
       status: assumed
@@ -93,7 +117,7 @@ spec:
       assumption: P0 只做本地安装（profile 内生效），不发布、不做版本化发布流程。
       if_wrong: 需要补打包、npm 发布、版本兼容矩阵与安装文档，额外 1 个迭代。
       confirm_by: "P0 完成后"
-    - q: 画布上的 frame 需要"可交互原型"（点击跳转/多状态）吗？
+    - q: 预览框里的屏需要"可交互原型"（点击跳转/多状态）吗？
       status: assumed
       asked_at: "2026-10-08"
       answer: ""
@@ -110,9 +134,9 @@ spec:
       description: 当前 session 的 cwd，用于定位 `.design/` 设计工程。
       source: DSH session
       required: true
-    - name: 用户在画布上的操作
-      description: 拖动 frame、改尺寸、iframe 内选中元素并改文字/颜色/间距、留批注。
-      source: 客户端画布 UI
+    - name: 用户在预览面板上的操作
+      description: 切换屏、点选元素改文字/颜色/间距、点选元素写批注。
+      source: 客户端预览面板
       required: false
     - name: 参考素材（P1）
       description: 用户给的截图/网址，用于提取品牌色与风格。
@@ -124,20 +148,22 @@ spec:
     schema: |
       .design/design.json:
         { version: 1,
-          viewport: { x: number, y: number, zoom: number },
+          viewport: { x: number, y: number, zoom: number },              # v4 起 UI 不再写入，字段保留仅为兼容
           selection: { frameId?: string, commentId?: string, updatedAt: string },
           tokens: { "color.primary": "#hex", "space.2": "8px", ... },   # 与 tokens.css 同源，只做只读镜像
           frames: [ { id: string, name: string, file: string, width: number, height: number,
-                      x: number, y: number, background?: string, status: "draft"|"ready" } ],
+                      x: number, y: number, background?: string, status: "draft"|"ready" } ],   # x/y v4 起 UI 不再使用
           comments: [ { id: string, frameId: string, target?: string, text: string,
                         x: number, y: number, resolved: boolean, createdAt: string } ] }
-      画布操作词表（v1 冻结，画布 UI 与 agent 工具共用同一个实现）：
+          # v4 起批注锚点=target（元素选择器路径），x/y 写 0、不再承担定位语义；找不到元素时该批注显示为"未锚定"但不丢弃
+      画布操作词表（host 冻结，UI 与 agent 工具共用同一实现）：
         add_frame | move_frame | resize_frame | rename_frame | delete_frame |
         switch_tokens | add_comment | resolve_comment | set_viewport | select
+      其中 v4 起 UI **不再调用** move_frame 与 set_viewport（空间编排已移除），host 保留以兼容与复用。
       未知操作整批拒绝（EUNKNOWN），不做部分应用。
-      画布写通道：host 在既有 webServer 上注册同源 exact route `POST /design-canvas/api`，
+      写通道：host 在既有 webServer 上注册同源 exact route `POST /design-canvas/api`，
         只收 {sessionId, ops}，工作区路径由 host 从 sessionId 解析、绝不接受客户端传路径；
-        必需校验 POST-only / Origin 同源 / Sec-Fetch-Site=same-origin / Content-Type: application/json / body 上限 4MB，
+        必需校验 POST-only / Origin 同源 / Sec-Fetch-Site=same-origin / Content-Type: application/json / body 上限 4MiB，
         任一不满足即拒（403/405/413/415）。不用 session command 做高频写，因为它会写 session log 并在聊天里渲染成行。
       .design/frames/<id>.html        自包含 HTML（样式与 token 内联），一屏一文件
       .design/tokens.css              设计契约（CSS 变量），P0 内置 3 套预设可切换
@@ -148,14 +174,17 @@ spec:
 
   constraints:
     - 必须做成 DSH 插件（Cordis），不新增常驻独立服务、不占新端口；不改 DSH 自身代码。
-    - 客户端代码必须走 `dsh.client` 打包契约（tsdown 产物形如 window.__ModuleLoader__.load），inject 只声明真实存在的客户端服务。
-    - 渲染模型生成的 HTML 必须在沙箱 iframe 中，**禁止** allow-same-origin；这是安全红线。
-    - 不引入 tldraw（非开源许可，生产要付费 + 水印）；画布自研。
+    - 客户端为**单文件、无构建步骤**（`client.js`，`window.__ModuleLoader__.load` 格式）；不用 tsdown/TS/打包器；不 require 任何 @deepseek-ai/* 客户端包。
+    - 渲染模型生成的 HTML 必须在沙箱 iframe 中，**禁止** allow-same-origin；这是安全红线，不得为任何交互便利而放宽。
+    - 预览面板不提供空间编排：不做平移、缩放、坐标、拖动改位置、多屏并排。
+    - "挂载点唯一：只注册右侧栏标签（`sidebarRightTabs` + `sidebar.right.pane.tab`/`.title`，session 级，天然绑定当前工作区）；不注册 `sidebar.panellist` 左侧栏入口，不注册 `main` 主面板座位——避免用户看不出这块设计跟着哪个工作区。"
+    - host 层（`index.js` / `src/host/**`）已通过独立验收，本版**不得修改**；`move_frame` / `set_viewport` / frame 的 x/y 保留但 UI 不调用。
     - 只做单向 设计→代码；不实现"代码改动反推回设计"的双向同步。
     - 每个 frame 自包含；不依赖 iframe 内的相对路径资源。
     - 所有 AC 必须在真实 GUI（http://127.0.0.1:3080）里可复现，不能只靠单测自证。
-    - 单一写者原则：同一时刻同一文件只允许一个成员修改；脚手架/接口冻结前，其他人不得并行改 client/host 边界文件。
+    - 单一写者原则：同一时刻同一文件只允许一个成员修改；验收窗口内非验收者不得写 `client.js` 与 `.design/`。
   out_of_scope:
+    - 无限画布、平移缩放、自由坐标、frame 拖动改位置、多屏并排空间编排
     - 图层面板、矢量钢笔、布尔运算、吸附对齐引擎、自动布局算法
     - 多人实时协同、评论 @ 提醒、分享链接
     - 组件变体/组件库管理/插件市场
@@ -167,42 +196,45 @@ spec:
     - cordis_inspect_list
     - cordis_inspect_query
     - plugin_manager
-    - mcp__playwright-mcp（browser_navigate / browser_snapshot / browser_take_screenshot / browser_evaluate / browser_console_messages）
+    - mcp__playwright-mcp（browser_navigate / browser_snapshot / browser_take_screenshot / browser_evaluate / browser_console_messages / browser_resize）
     - bash
     - read / write / edit / glob / grep
+    - design_status / design_frame_write / design_canvas_apply
     - team_task_* / spawn_teammate / send_message / wait_agent
   steps:
-    - "S1（前置，串行）插件脚手架与安装：建包 + host 半 + client 半 + tsdown 打包 + 装进 web profile，使左侧栏出现「设计」图标、点击可切到一张空白画布页；同时冻结 client/host 共享类型契约（帧/批注/操作的类型定义文件），作为后续并行开发的接口基准。"
-    - "S2（可与 S3 并行）host 数据层与 agent 工具：`.design/` 工程读写（design.json / frames / tokens.css）、初始化预设、design_status / design_frame_write / design_canvas_apply 三个工具、非法 JSON 与不可写目录的错误处理、以及面向客户端的 Remote 写接口。"
-    - "S3（可与 S2 并行）画布客户端：无限画布（平移/缩放/适应）、frame 沙箱渲染、选中与拖动、改尺寸、iframe 内元素探针与属性改写、批注气泡、以及订阅 `workspaceFiles.changes` 实现文件变更自动刷新。"
-    - "S4 设计契约与落地出口：3 套内置 token 预设 + 2~3 个 frame 起步模板 + 注入 systemPrompt 的设计约定 + 「落地到项目」链路（把选中 frame 交给 agent 转成项目代码写入 src/）。"
-    - "S5 集成与独立验收：装齐后在 127.0.0.1:3080 跑通窄闭环，逐条核对 AC，独立复核者不参与实现。"
+    - "S1（已完成）插件脚手架与安装：建包 + host 半 + client 半，装进 web profile，左侧栏出现「设计」入口。"
+    - "S2（已完成并通过独立验收）host 数据层与 agent 工具：`.design/` 工程读写、init 预设与模板、三个工具、写通道与五项护栏、错误码与边界处理。"
+    - "S3（v4 返工）预览面板客户端：删除无限画布（相机/坐标/拖动/并排/世界坐标批注浮层），改为单屏预览 + 切屏条 + 工具栏缩编；保留沙箱渲染、探针、五种占位、检查器、元素锚点批注、读写通道与自动刷新。"
+    - "S4（已完成）设计契约与落地出口：3 套 token 预设 + 3 个中文模板 + 注入 systemPrompt 的设计约定 + 落地流程。"
+    - "S5 集成与独立验收：按 v4 的 12 条 AC 在真实 GUI 逐条复核，独立复核者不参与实现；画布相关的旧证据作废，跨形态复用部分可沿用。"
   acceptance_criteria:
-    - "AC1 挂载可见：DSH 启动后，http://127.0.0.1:3080 左侧栏出现「设计」图标；点击后主面板切到画布页面，页面在 3 秒内渲染完成，浏览器控制台无未捕获异常。"
-    - "AC2 同屏：画布打开后聊天输入框与画布同时可见（右侧栏标签页、shell.overlay 浮层或等价分屏任一实现均可），用户无需在两个面板间来回切换即可边看边聊。"
-    - "AC3 对话生成：在对话里发送「设计一个 SaaS 后台的订单列表页」后，agent 调用设计工具，画布上出现 1~3 个 frame，每个 frame 内渲染出非空白的真实页面（可见文字或结构），frame 实际渲染宽高与 design.json 声明值一致。"
-    - "AC4 落盘：生成后工作区出现 `.design/design.json` 与 `.design/frames/*.html`；design.json 中每个 frame 含 id/name/width/height/x/y 字段；`git status --porcelain` 能列出这些文件，且 `git add -N .design/` 之后 `git diff` 能看到内容变化（未跟踪文件对 git diff 不可见，故用此口径）。"
-    - "AC5 画布操作持久化：拖动某个 frame 改变位置后刷新浏览器，该 frame 仍出现在拖动后的位置（位置已写入 design.json）。"
-    - "AC6 就地改元素：在 frame 内选中一个文本元素并修改其文字后，`.design/frames/<id>.html` 中对应文字被改写；随后 agent 读取该屏时看到的是修改后的文字。"
-    - "AC7 对话改设计自动刷新：在对话里说「主色换成深蓝、间距放大一点」，agent 修改文件后画布在 2 秒内自动刷新出新样式，无需用户手动刷新，且 frame 位置与缩放不被打断。"
-    - "AC8 批注闭环：在画布上留一条批注「这个按钮太土了」后，agent 调用 design_status，返回结果中包含这条未处理批注的原文及其所属 frameId。"
-    - "AC9 落代码：对选中的 frame 触发「落地到项目」，agent 把该屏转成项目技术栈的组件文件写入 src/（或用户指定目录）并返回写入路径；生成文件不包含指向 `.design/` 的相对路径引用。"
-    - "AC10 安全（失败路径）：在 frame HTML 中注入 `<script>parent.document.title='pwned'</script>` 与读取 document.cookie 的脚本并刷新画布后，DSH 页面标题不变、frame 内脚本无法访问父窗口、控制台出现沙箱拦截相关信息。"
-    - "AC11 边界容错：frame HTML 为 0 字节、或超过 2 MiB（=2,097,152 字节，实现必须用这个阈值而非十进制 2,000,000）时，画布不崩溃并显示明确错误占位与提示；design.json 被手工改成非法 JSON 时，插件回退为空工程并把坏文件另存为 design.json.bak，不抛未捕获异常。验收需覆盖 0 / 1 / 1,999,999 / 2,000,000 / 2,000,001 / 2,097,152 / 2,097,153 字节七个边界值，并报告实现的实际阈值。"
-    - "AC12 失败可读：`.design/` 目录不可写时，agent 工具返回的错误信息包含失败路径与原因，且不静默成功。"
+    - "AC1 挂载可见（右侧栏，跟随工作区）：预览面板作为**右侧栏的一个标签**存在，可从右侧栏自身的添加/guide 入口打开（侧栏空态即 guide，需能看到「设计预览」胶囊）；打开后展示的是**当前会话工作区**的 `.design/`（切换会话/工作区后，面板内容随之切换，不会显示别的工作区的设计）；面板在 3 秒内渲染完成，浏览器控制台无未捕获异常（沙箱拦截类日志除外）。左侧栏**不得**再出现「设计」入口。"
+    - "AC2 同屏：预览面板打开后，聊天输入框与预览面板**同一时刻**都在视口内且互不遮挡（用 getBoundingClientRect 证明水平零重叠、且命中测试不被遮挡，即 track 挤压而非浮层）。"
+    - "AC3 对话生成：在对话里发送「设计一个 SaaS 后台的订单列表页」后，agent 调用设计工具并**新增** 1~3 屏（新增计数以 design.json 的 frames 数量变化为准）；预览面板可在这些屏之间切换，每屏渲染出非空白的真实页面，实际渲染宽高与 design.json 声明值一致。"
+    - "AC4 落盘：生成后工作区出现 `.design/design.json` 与 `.design/frames/*.html`；design.json 中每个 frame 含 id/name/width/height 字段；`git status --porcelain` 能列出这些文件，且 `git add -N .design/` 之后 `git diff` 能看到内容变化（未跟踪文件对 git diff 不可见，故用此口径）。"
+    - "AC5 切屏与恢复：当工程有 2 屏以上时，切屏控件能在各屏之间切换且每次切换后渲染的是该屏内容（不是上一屏残留）；刷新浏览器后仍停留在刷新前那一屏（由 design.json 的 selection.frameId 恢复）。"
+    - "AC6 就地改元素：在预览中点选一个文本元素并修改其文字后，`.design/frames/<id>.html` 中对应文字被改写；随后 agent 读取该屏时看到的是修改后的文字。"
+    - "AC7 自动刷新：agent 修改文件后预览在 2 秒内自动刷新出新样式，无需用户手动刷新；必须单独验证「只改 `.design/frames/<id>.html`（design.json 不变）」这条路径；刷新不得重置用户的滚动位置与选中态。"
+    - "AC8 批注闭环：在预览中点选某元素写一条批注「这个按钮太土了」后，agent 调用 design_status 能读到该批注的原文、所属 frameId 与 target 选择器；若之后 HTML 被重写导致选择器失效，该批注仍出现在列表里并标记为未锚定，不得静默丢失。"
+    - "AC9 落代码：对当前屏触发「落地到项目」，agent 把该屏转成项目技术栈的组件文件写入 src/（或用户指定目录）并返回写入路径；生成文件不包含指向 `.design/` 的相对路径引用。"
+    - "AC10 安全（失败路径）：在 frame HTML 中注入 `parent.document.title='pwned'`、读 document.cookie、`top.location` 跳转与 parent.localStorage 访问的脚本并让其渲染后，DSH 页面标题与 URL 不变、frame 内脚本无法访问父窗口（SecurityError）、控制台出现沙箱拦截信息，且**不得出现 Chrome 的 'can escape its sandboxing' 警告**。"
+    - "AC11 边界容错：frame HTML 为 0 字节、或超过 2 MiB（=2,097,152 字节，实现必须用这个阈值而非十进制 2,000,000）时，预览面板不崩溃并显示明确错误占位与「重新加载」；design.json 被手工改成非法 JSON 时，插件回退为空工程并把坏文件另存为 design.json.bak，不抛未捕获异常。验收需覆盖 0 / 1 / 1,999,999 / 2,000,000 / 2,000,001 / 2,097,152 / 2,097,153 字节七个边界值，并报告实现的实际阈值。"
+    - "AC12 失败可读：`.design/` 目录不可写时，agent 工具返回的错误信息包含失败路径与原因，且不静默成功；预览端的写操作失败时同样可见（顶部提示含宿返回的错误原因），不静默吞掉。"
   verification: {}
   follow_ups: []
   failure_handling:
-    - scenario: 插件安装进 profile 失败或打包产物不合法（客户端报 __ModuleLoader__ 相关错误）
-      handling: 回退到最小可加载骨架（只注册一个静态面板）逐层定位；保留安装脚本可重复执行；不修改 DSH 自身代码绕过。
-    - scenario: GUI 已在运行但插件未热更新
-      handling: 按 DSH 插件安装流程重载（必要时重启 profile），并在 AC 中记录"刷新页面后生效"的确切步骤，避免把"没刷新"误判为功能失败。
-    - scenario: iframe 渲染超大/空白/含死循环脚本导致页面卡死
-      handling: iframe 加超时占位与 sandbox 限制；超过 2MB 拒绝渲染并显示占位；卡死时提供"重新加载该 frame"按钮。
+    - scenario: 插件安装进 profile 失败或客户端模块不合法（报 __ModuleLoader__ 相关错误）
+      handling: 回退到最小可加载骨架逐层定位；不修改 DSH 自身代码绕过。
+    - scenario: 替换已安装包后 host 行为未更新
+      handling: 这是 DSH 既定行为（Node ESM 模块缓存），必须重启 `dsh web`；已写入 docs/architecture.md，避免误判为功能失败。
+    - scenario: iframe 渲染超大/空白/含死循环脚本
+      handling: 0 字节 → 空帧占位；>2 MiB → 先 stat 再决定读、直接拒绝渲染并占位；死循环 → 6 秒无 ready 显示渲染超时占位并提供「重新加载」。
+    - scenario: 批注锚点失效（agent 重写 HTML 导致选择器指不到元素）
+      handling: 定位失败时在批注列表显示为"未锚定"并保留原文，绝不静默丢弃；P1 考虑给元素注入稳定锚点 id。
     - scenario: agent 不按约定调用设计工具（直接写文件或不写）
-      handling: 通过 systemPrompt 注入的设计约定 + 工具描述纠偏；画布对文件变更始终监听，即使 agent 绕过工具直接改文件也能刷新；连续 2 轮未产出 frame 时在工具返回值中给出明确下一步指令。
+      handling: 通过 systemPrompt 设计约定 + 工具描述纠偏；预览对文件变更始终监听，即使 agent 绕过工具直接改文件也能刷新。
     - scenario: 写入文件与用户并发编辑冲突
-      handling: 采用"最后写入者胜 + 变更广播"；P0 不做冲突合并，但每次写入附带修改来源（user/agent）记录到 design.json 便于追溯。
+      handling: 采用"最后写入者胜 + 变更广播"；P0 不做冲突合并，每次写入记录来源（user/agent）到 design.json 便于追溯。
   examples:
-    - input: 用户在对话里说「设计一个 SaaS 后台的订单列表页」，随后在画布上把第二个 frame 拖到右边，并留批注「这个按钮太土了」，再在对话里说「主色换成深蓝」。
-      output: 画布出现 2 个 frame（订单列表 + 订单详情），`.design/frames/order-list.html` 与 `order-detail.html` 生成；design.json 记录两个 frame 的坐标；批注进入 comments[]；agent 读到批注与选中态后修改 tokens.css 的 color.primary 并调整按钮样式，画布 2 秒内自动刷新；最后点「落地到项目」，agent 输出 src/pages/orders/list.tsx。
+    - input: 用户在对话里说「设计一个 SaaS 后台的订单列表页」，然后在预览面板切到第二屏、点选一个按钮把文字改成「导出报表」、并在该按钮上写批注「这个按钮太土了」，最后说「主色换成深蓝」，满意后点「落地到项目」。
+      output: 预览面板出现 2 屏（订单列表 + 订单详情），`.design/frames/order-list.html`、`order-detail.html` 落盘并在 design.json 登记；点选改文字后 HTML 文件被改写；批注写入 comments[]（frameId + target 选择器）；agent 读到批注与选中态后切换 token 预设并调整按钮样式，预览 2 秒内自动刷新；最后 agent 输出 `src/pages/orders/list.tsx`。
