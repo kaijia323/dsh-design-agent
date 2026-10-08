@@ -218,12 +218,16 @@ window.__ModuleLoader__.load({
       '}',
       'document.addEventListener("mouseover", function(e){',
       '  if(!e.target || e.target===document.documentElement) return;',
+      '  if(insideMark(e.target)) return;',
       '  unhover(); hovered=e.target; hoverOutline=hovered.style.outline;',
       '  hovered.style.outline="2px solid #4c8dff";',
       '}, true);',
       'document.addEventListener("mouseout", function(e){ if(e.target===hovered) unhover(); }, true);',
+      'function insideMark(node){ return !!(node && node.closest && node.closest("[data-dsh-comment-mark]")); }',
       'document.addEventListener("click", function(e){',
-      '  if(!e.target) return; e.preventDefault(); e.stopPropagation();',
+      '  if(!e.target) return;',
+      '  if(insideMark(e.target)) return;  // 角标自己处理：放行给它的 onclick，别当成选中元素',
+      '  e.preventDefault(); e.stopPropagation();',
       '  selected=e.target; unhover(); post({ type:"select", info: describe(selected) });',
       '}, true);',
       'document.addEventListener("submit", function(e){ e.preventDefault(); }, true);',
@@ -839,6 +843,16 @@ window.__ModuleLoader__.load({
           if (!data || data.__dshDesign !== 1) return;
           if (data.type === 'ready') {
             setStatus('ok');
+            // 探针此刻一定在监听（它刚发完 ready），这是补发缩放比最可靠的时机：
+            // iframe 每次重挂载，探针里的 badgeScale 都会回到 1，必须在这里重发。
+            // 直接用 event.source（就是那个 contentWindow），不绕 ref，避免时序问题。
+            try {
+              if (event.source && typeof event.source.postMessage === 'function') {
+                event.source.postMessage({ __dshDesignCmd: true, cmd: 'setBadgeScale', scale: scaleRef.current }, '*');
+              }
+            } catch (error) {
+              /* 帧可能已经没了，忽略 */
+            }
             if (data.sandbox) {
               const f = data.sandbox;
               // 帧自己测过边界；把结论打到页面控制台，AC10 要的就是这条拦截痕迹。
@@ -879,13 +893,21 @@ window.__ModuleLoader__.load({
         return () => registerCommand(frame.id, null);
       }, [frame.id, command, registerCommand]);
 
-      // 把缩放比告诉帧内探针：批注角标按 1/缩放 反向放大，才能在任何缩放下保持屏幕上
-      // 的恒定大小（38% 时若按原尺寸渲染只剩 6.9px，既看不清也点不动）。
-      // 依赖里带上 status：iframe 每次重挂载后探针的 badgeScale 会回到 1，必须重发。
+      // 最新缩放比。消息 handler 的依赖数组里没有 scale，闭包会拿到旧值，所以走 ref。
+      const scaleRef = React.useRef(scale);
+      React.useEffect(() => {
+        scaleRef.current = scale;
+      }, [scale]);
+
+      // 缩放开度变化时同步给探针。
+      //
+      // 注意：这个 effect 在 iframe 刚挂载、探针还没执行时也会跑，那条消息会被丢掉
+      // （没人监听）。所以**可靠性不能只靠它** —— 探针每次 post `ready` 时由 handler
+      // 直接补发一次（见上面 ready 分支），那才是"探针确实在听"的确切时机。
       React.useEffect(() => {
         if (!renderable) return;
         command({ cmd: 'setBadgeScale', scale: scale });
-      }, [scale, renderable, command, status]);
+      }, [scale, renderable, command]);
 
       const placeholder = (label, hint) =>
         h(
