@@ -6,5 +6,8 @@ dist/
 # 插件安装过程可能留下的本地状态
 .dsh-install.json
 
+# 自动化验证时 Playwright MCP 落下的临时产物
+.playwright-mcp/
+
 # 设计工程数据（插件运行时产物，默认不进仓库；需要版本化时手动放开）
 # .design/

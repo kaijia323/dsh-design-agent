@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "default": "neutral-modern",
+  "presets": [
+    {
+      "id": "neutral-modern",
+      "name": "中性现代",
+      "description": "冷灰中性底 + 单一靛蓝主色，靠层级、留白与字重对比撑住版面。默认预设，适合 SaaS 后台、通用产品界面。",
+      "file": "design-system/tokens/neutral-modern.css",
+      "mode": "light",
+      "swatches": {
+        "bg": "#f6f7f9",
+        "surface": "#ffffff",
+        "primary": "#2b4fd4",
+        "accent": "#d97a45",
+        "text": "#16181d"
+      },
+      "fonts": {
+        "display": "system-ui, -apple-system, \"PingFang SC\", \"HarmonyOS Sans SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif",
+        "body": "\"PingFang SC\", \"HarmonyOS Sans SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, -apple-system, sans-serif",
+        "mono": "ui-monospace, \"SF Mono\", \"JetBrains Mono\", Menlo, Consolas, \"Courier New\", monospace"
+      },
+      "scale": {
+        "base": 16,
+        "unit": 4,
+        "radius": 10
+      }
+    },
+    {
+      "id": "editorial-warm",
+      "name": "编辑部暖调",
+      "description": "米白纸感底 + 宋体大标题 + 赭石主色，方正小圆角与接近零的阴影。适合内容、品牌、阅读型产品与对外页面。",
+      "file": "design-system/tokens/editorial-warm.css",
+      "mode": "light",
+      "swatches": {
+        "bg": "#f7f3ec",
+        "surface": "#fffdf8",
+        "primary": "#9c4a2a",
+        "accent": "#3a6152",
+        "text": "#1c1a17"
+      },
+      "fonts": {
+        "display": "\"Songti SC\", \"Source Han Serif SC\", \"Noto Serif SC\", \"Noto Serif CJK SC\", \"STSong\", \"SimSun\", Georgia, serif",
+        "body": "\"PingFang SC\", \"Hiragino Sans GB\", \"Source Han Sans SC\", \"Noto Sans SC\", \"Microsoft YaHei\", system-ui, sans-serif",
+        "mono": "ui-monospace, \"SF Mono\", \"JetBrains Mono\", Menlo, Consolas, \"Courier New\", monospace"
+      },
+      "scale": {
+        "base": 16,
+        "unit": 4,
+        "radius": 4
+      }
+    },
+    {
+      "id": "tech-dark",
+      "name": "科技工具",
+      "description": "近黑蓝底 + 青色主色 + 等宽数字，紧凑字号阶梯与更小的控件高度。适合监控面板、开发工具、数据密集型界面。",
+      "file": "design-system/tokens/tech-dark.css",
+      "mode": "dark",
+      "swatches": {
+        "bg": "#0f1318",
+        "surface": "#151a21",
+        "primary": "#3ecfbd",
+        "accent": "#f07a4a",
+        "text": "#e6eaf0"
+      },
+      "fonts": {
+        "display": "system-ui, -apple-system, \"PingFang SC\", \"HarmonyOS Sans SC\", \"Microsoft YaHei\", \"Noto Sans SC\", sans-serif",
+        "body": "\"PingFang SC\", \"HarmonyOS Sans SC\", \"Microsoft YaHei\", \"Noto Sans SC\", system-ui, -apple-system, sans-serif",
+        "mono": "ui-monospace, \"SF Mono\", \"JetBrains Mono\", Menlo, Consolas, \"Courier New\", monospace"
+      },
+      "scale": {
+        "base": 15,
+        "unit": 4,
+        "radius": 8
+      }
+    }
+  ]
+}

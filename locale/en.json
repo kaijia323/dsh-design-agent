@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Design Canvas",
-    "description": "Design UI on an infinite canvas by chatting with DSH, then hand the result to code."
+    "title": "设计画布",
+    "description": "在 DSH 里边聊边在无限画布上设计 UI：每屏一个真实 HTML 沙箱渲染，可就地拖拽 / 改元素 / 留批注，满意后直接落成前端代码。"
   }
 }

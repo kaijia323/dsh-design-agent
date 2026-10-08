@@ -1,0 +1,77 @@
+/* DSH 设计预设：editorial-warm · 编辑部暖调 · 浅色
+ * 契约见 design-system/README.md。本文件被逐字拷贝为 <workspace>/.design/tokens.css，
+ * 变量名一旦发布不得更改（design.json 的 tokens 镜像按变量名去 -- 后把第一个 - 换成 . 生成）。
+ * 每个 frame 模板内联的 :root 块必须与本文件逐字一致，可用 design-system/tools/check-design-system.mjs 校验。
+ */
+
+:root {
+  /* 颜色：1 主色（赭石）+ 1 强调色（深松绿），其余为纸感中性色与语义色 */
+  --color-primary: #9c4a2a;
+  --color-primary-hover: #7f3a1f;
+  --color-primary-weak: #f6e7df;
+  --color-on-primary: #fffaf5;
+  --color-accent: #3a6152;
+  --color-accent-weak: #e4ece7;
+  --color-bg: #f7f3ec;
+  --color-surface: #fffdf8;
+  --color-surface-sunken: #efe8dd;
+  --color-border: #e2d8c8;
+  --color-border-strong: #c9bba4;
+  --color-text: #1c1a17;
+  --color-text-muted: #5f5a51;
+  --color-text-faint: #857e73;
+  --color-success: #2f6b4a;
+  --color-warning: #8a5a12;
+  --color-danger: #a8341f;
+  --color-focus: rgba(156, 74, 42, 0.26);
+
+  /* 字体：标题用宋体栈、正文用黑体栈；全部本地，零外链 */
+  --font-display: "Songti SC", "Source Han Serif SC", "Noto Serif SC", "Noto Serif CJK SC", "STSong", "SimSun", Georgia, serif;
+  --font-body: "PingFang SC", "Hiragino Sans GB", "Source Han Sans SC", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+
+  /* 字号阶梯：12 / 14 / 16 / 19 / 24 / 32 / 42 / 56（标题尺度更大，适合长文阅读） */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 19px;
+  --text-xl: 24px;
+  --text-2xl: 32px;
+  --text-3xl: 42px;
+  --text-4xl: 56px;
+
+  /* 行高：长文正文 1.75，标题收紧 */
+  --leading-tight: 1.15;
+  --leading-snug: 1.4;
+  --leading-normal: 1.75;
+  --leading-relaxed: 1.9;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* 间距节奏：4 的倍数 */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 8px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 0 rgba(60, 45, 25, 0.06);
+  --shadow-md: 0 6px 18px -12px rgba(60, 45, 25, 0.28);
+  --shadow-lg: 0 12px 32px -16px rgba(60, 45, 25, 0.32);
+
+  --layout-max: 1080px;
+  --layout-gutter: 32px;
+  --control-h: 40px;
+}

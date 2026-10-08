@@ -1,0 +1,77 @@
+/* DSH 设计预设：neutral-modern · 中性现代 · 浅色
+ * 契约见 design-system/README.md。本文件被逐字拷贝为 <workspace>/.design/tokens.css，
+ * 变量名一旦发布不得更改（design.json 的 tokens 镜像按变量名去 -- 后把第一个 - 换成 . 生成）。
+ * 每个 frame 模板内联的 :root 块必须与本文件逐字一致，可用 design-system/tools/check-design-system.mjs 校验。
+ */
+
+:root {
+  /* 颜色：1 主色 + 1 强调色，其余为中性面与语义色 */
+  --color-primary: #2b4fd4;
+  --color-primary-hover: #2240b4;
+  --color-primary-weak: #e9edfb;
+  --color-on-primary: #ffffff;
+  --color-accent: #d97a45;
+  --color-accent-weak: #fbeee6;
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #eef0f4;
+  --color-border: #e3e6eb;
+  --color-border-strong: #c8ced7;
+  --color-text: #16181d;
+  --color-text-muted: #5c636e;
+  --color-text-faint: #7d858f;
+  --color-success: #1f7a4d;
+  --color-warning: #9a6212;
+  --color-danger: #c0392f;
+  --color-focus: rgba(43, 79, 212, 0.28);
+
+  /* 字体：中文优先的本地字体栈，零外链（画布跑在 sandbox iframe + srcdoc 里，没有可靠网络） */
+  --font-display: system-ui, -apple-system, "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  --font-body: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, "Courier New", monospace;
+
+  /* 字号阶梯：12 / 14 / 16 / 18 / 22 / 28 / 36 / 48（中文正文不小于 14px） */
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+  --text-3xl: 36px;
+  --text-4xl: 48px;
+
+  /* 行高：中文比拉丁字需要更松的行距 */
+  --leading-tight: 1.2;
+  --leading-snug: 1.4;
+  --leading-normal: 1.65;
+  --leading-relaxed: 1.8;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* 间距节奏：4 的倍数 */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+
+  --shadow-sm: 0 1px 2px rgba(16, 20, 30, 0.06);
+  --shadow-md: 0 1px 3px rgba(16, 20, 30, 0.07), 0 8px 24px -12px rgba(16, 20, 30, 0.18);
+  --shadow-lg: 0 4px 12px rgba(16, 20, 30, 0.08), 0 24px 48px -24px rgba(16, 20, 30, 0.24);
+
+  --layout-max: 1280px;
+  --layout-gutter: 24px;
+  --control-h: 36px;
+}

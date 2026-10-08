@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "templates": [
+    {
+      "id": "order-list",
+      "name": "后台订单列表",
+      "description": "左侧导航 + 顶栏 + 指标条 + 状态筛选 + 数据表 + 分页的完整后台页，对应用户最常说的「SaaS 后台订单列表页」。",
+      "file": "design-system/templates/order-list.html",
+      "preset": "neutral-modern",
+      "width": 1440,
+      "height": 900,
+      "tags": ["桌面端", "后台", "数据表", "SaaS"]
+    },
+    {
+      "id": "dashboard",
+      "name": "监控仪表盘",
+      "description": "KPI 磁贴 + 折线图 + 分布条形 + 服务健康与告警右栏，演示深色预设、等宽数字与紧凑信息密度。",
+      "file": "design-system/templates/dashboard.html",
+      "preset": "tech-dark",
+      "width": 1440,
+      "height": 900,
+      "tags": ["桌面端", "仪表盘", "深色", "数据可视化"]
+    },
+    {
+      "id": "mobile-home",
+      "name": "移动端首页",
+      "description": "390×844 手机屏：状态栏 + 报头 + 封面长文 + 精选列表 + 底部标签栏，演示中文衬线标题与长文阅读排版。",
+      "file": "design-system/templates/mobile-home.html",
+      "preset": "editorial-warm",
+      "width": 390,
+      "height": 844,
+      "tags": ["移动端", "编辑部", "内容"]
+    }
+  ]
+}
