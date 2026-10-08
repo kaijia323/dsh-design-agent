@@ -1,0 +1,31 @@
+{
+  "name": "@local/dsh-design-canvas",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "DSH 原生画布设计插件：对话驱动 UI 设计 → 前端代码",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "src",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  }
+}

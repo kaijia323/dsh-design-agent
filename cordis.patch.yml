@@ -1,0 +1,6 @@
+# Loader patch for the design-canvas bundle.
+# The Host half (index.js) registers agent tools and the design-project service;
+# the Client half (client.js) renders the canvas into the harness Web UI.
+- insert:
+    - id: design-canvas
+      name: '@local/dsh-design-canvas'
