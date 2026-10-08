@@ -2,9 +2,9 @@ spec:
   type: feature
   name: DSH 设计预览插件（对话驱动 UI 设计 → 前端代码）
   id: feature-dsh-design-canvas
-  version: 9
-  updated: "2026-10-08"
-  status: ready
+  version: 11
+  updated: "2026-10-09"
+  status: verified
   blocked_reason: ""
   status_log:
     - date: "2026-10-08"
@@ -55,6 +55,24 @@ spec:
       by: lead
       version: 8
       note: 独立验收报告出炉：11 条 AC 通过、AC3 待补口径、附加项「自动打开」无法确认（不记为通过）。本版修正 AC3 的判定口径（比较 frame 自身内容尺寸与声明值；预览视口由右侧栏宽度决定，不同不算违规），并登记 4 条产品债：F4（预览视口≠声明尺寸，P1 可做 fit-to-width，注意缩放会改动指针坐标映射、须连带回归 AC6/AC8）、F5（自动打开缺可重置/可观测的抑制状态，无法验证）、F6（锚点失效需手动刷新才显示未锚定）、F7（切会话时预览面板消失）。
+    - date: "2026-10-08"
+      from: ready
+      to: ready
+      by: lead
+      version: 9
+      note: 独立验收把 AC3 判为**真实产品缺陷**（预览按容器宽渲染，桌面屏被重排到 553px，用户看到的不是他选的版式），而非标准过严——裁定**修实现**：iframe 内部按声明尺寸布局、仅在外层等比缩放适配。修后实测 dashboard/order-list 内容根由 553×1006 / 986×1494 恢复为 1440×900。constraints 新增「渲染尺寸策略」；F4 随本次修复解决，已从 follow_ups 移除。同轮回归又发现该改动引入的新回归：缩放到 38% 时批注角标屏幕上仅 7px（父侧未在探针 ready 后重发 setBadgeScale）、且点角标会弹出属性检查器——已派修，不登记为 follow_up（属回归而非历史债）。
+    - date: "2026-10-09"
+      from: ready
+      to: done
+      by: lead
+      version: 10
+      note: "12 条 AC 全部经独立验收通过；独立验收者共抓出并促成修复 5 个真缺陷（413 连接重置、AC9 未注入属性访问、AC3 按容器尺寸渲染、角标缩放回归，另有实现者自查修复项）"
+    - date: "2026-10-09"
+      from: done
+      to: verified
+      by: dsh
+      version: 11
+      note: "独立验收者（未参与实现）逐条复核 12 条 AC，全部 PASS；验证人非执行者本人"
   related: []
   goal: 让用户在 DSH 聊天窗口里，通过对话让 agent 以「每屏一个真实 HTML」为单位设计 UI；用户在右侧预览面板里边聊边看，可切换屏幕、点元素就地改文字/颜色/间距、点元素写批注，满意后由 agent 把设计落成前端代码——从而把「先设计 UI 再写前端」这条流程搬回 AI 研发链路里。
   context: |
@@ -99,27 +117,7 @@ spec:
     - 设计工程数据放在当前工作区（session cwd）下的 `.design/`，可进 git、可被 agent 直接 read/write/edit。
     - 每屏 HTML 自包含（样式与 token 内联），避免沙箱 iframe 里的相对路径依赖。
     - agent 改页面内容优先复用原生 read/write/edit 操作 `.design/frames/*.html`；设计工具只做"工程状态读写 + 落盘 + 校验"，不重复造文件编辑能力。
-  blocking_questions:
-    - q: 这个仓库的定位是"DSH 原生插件主打真无限画布"、"借力 OpenDesign 只补画布层"，还是"先自用不出圈"？
-      answered: true
-      asked_at: "2026-10-08"
-      answer: "DSH 原生插件，主打它没有的那块：真无限画布 + 边聊边改（推荐）"
-    - q: 画布上摆的东西是真实网页、矢量图形，还是混合？
-      answered: true
-      asked_at: "2026-10-08"
-      answer: "真实网页：每屏一个 HTML，沙箱渲染，可点可滚（推荐）"
-    - q: 第一刀砍多大？
-      answered: true
-      asked_at: "2026-10-08"
-      answer: "窄闭环：对话 → 画布出 1~3 屏 → 就地和聊天改 → 落成代码（推荐）"
-    - q: （v4 追加）用过之后，无限画布到底要不要留？
-      answered: true
-      asked_at: "2026-10-08"
-      answer: "整个画布都多余，我只要聊天 + 一个预览框"
-    - q: （v4 追加）预览框做到哪一步？
-      answered: true
-      asked_at: "2026-10-08"
-      answer: "上面都要，再加「点元素写批注」（即：渲染 + 切屏 + 自动刷新 + 落地按钮 + 点元素就地改文字/颜色/间距 + 点元素写批注）"
+  blocking_questions: []   # 5 条阻塞问题已全部由用户答复并落进 context（形态决策一节）与 AC6/AC8/AC9；按 spec-builder 要求，答复后条目搬走、结论留在正文
   open_questions:
     - q: 设计工程文件放在工作区 `.design/` 目录是否合适（会不会污染用户仓库）？
       status: assumed
@@ -195,7 +193,7 @@ spec:
     - 客户端为**单文件、无构建步骤**（`client.js`，`window.__ModuleLoader__.load` 格式）；不用 tsdown/TS/打包器；不 require 任何 @deepseek-ai/* 客户端包。
     - 渲染模型生成的 HTML 必须在沙箱 iframe 中，**禁止** allow-same-origin；这是安全红线，不得为任何交互便利而放宽。
     - 预览面板不提供空间编排：不做平移、缩放、坐标、拖动改位置、多屏并排。
-    - "渲染尺寸策略：**iframe 内部的布局尺寸必须等于 frame 的声明尺寸**（声明 1440×900 就按 1440×900 布局，不得按容器宽度重排）；适配面板只在**外层**用 `transform: scale(min(1, 面板宽/声明宽))` 等比缩放，只缩不放，并显示缩放比例。这条是 AC3 的成立前提，也是"用户看到的必须是他选的那个版式"的保证。"
+    - "渲染尺寸策略：**iframe 内部的布局尺寸必须等于 frame 的声明尺寸**（声明 1440×900 就按 1440×900 布局，不得按容器宽度重排）；适配面板只在**外层**用 `transform: scale(min(1, 面板宽/声明宽))` 等比缩放，只缩不放，并显示缩放比例。这条是 AC3 的成立前提，也是「用户看到的必须是他选的那个版式」的保证。"
     - "挂载点唯一：只注册右侧栏标签（`sidebarRightTabs` + `sidebar.right.pane.tab`/`.title`，session 级，天然绑定当前工作区）；不注册 `sidebar.panellist` 左侧栏入口，不注册 `main` 主面板座位——避免用户看不出这块设计跟着哪个工作区。"
     - host 层（`index.js` / `src/host/**`）已通过独立验收，本版**不得修改**；`move_frame` / `set_viewport` / frame 的 x/y 保留但 UI 不调用。
     - 只做单向 设计→代码；不实现"代码改动反推回设计"的双向同步。
@@ -239,12 +237,59 @@ spec:
     - "AC10 安全（失败路径）：在 frame HTML 中注入 `parent.document.title='pwned'`、读 document.cookie、`top.location` 跳转与 parent.localStorage 访问的脚本并让其渲染后，DSH 页面标题与 URL 不变、frame 内脚本无法访问父窗口（SecurityError）、控制台出现沙箱拦截信息，且**不得出现 Chrome 的 'can escape its sandboxing' 警告**。"
     - "AC11 边界容错：frame HTML 为 0 字节、或超过 2 MiB（=2,097,152 字节，实现必须用这个阈值而非十进制 2,000,000）时，预览面板不崩溃并显示明确错误占位与「重新加载」；design.json 被手工改成非法 JSON 时，插件回退为空工程并把坏文件另存为 design.json.bak，不抛未捕获异常。验收需覆盖 0 / 1 / 1,999,999 / 2,000,000 / 2,000,001 / 2,097,152 / 2,097,153 字节七个边界值，并报告实现的实际阈值。"
     - "AC12 失败可读：`.design/` 目录不可写时，agent 工具返回的错误信息包含失败路径与原因，且不静默成功；预览端的写操作失败时同样可见（顶部提示含宿返回的错误原因），不静默吞掉。"
-  verification: {}
+  verification:
+    result: "12/12 AC 复核通过；附加项写通道护栏 PASS；「自动打开」如实标注无法确认；终态控制台零插件未捕获异常"
+    verified_by: independent
+    verifier: teammate-verifier
+    verified_at: "2026-10-09"
+    acceptance:
+      - criterion: "AC1 挂载可见（右侧栏，跟随工作区）"
+        status: pass
+        evidence: "guide 胶囊入口 35ms 打开；左侧栏只剩 Plugins/Automation tasks；双工作区来回切不串数据"
+      - criterion: "AC2 同屏"
+        status: pass
+        evidence: "聊天列 280-704 / 预览列 704-1280，重叠面积 0；elementFromPoint 命中自身；同父兄弟且非 absolute → track 非浮层"
+      - criterion: "AC3 对话生成"
+        status: pass
+        evidence: "三屏内容尺寸全部等于声明值：390×844 / 1440×900 / 1440×900；transform-origin 0 0；视觉宽 551 ≤ 576 无横向裁切"
+      - criterion: "AC4 落盘"
+        status: pass
+        evidence: "git add -N 后 10 文件 27567 行可被 git diff 看到；.design 未被跟踪、未被提交"
+      - criterion: "AC5 切屏与恢复"
+        status: pass
+        evidence: "切到第 3 屏 → selection.frameId 落盘 → 整页刷新后仍停在第 3 屏"
+      - criterion: "AC6 就地改元素"
+        status: pass
+        evidence: "点元素改文字 → 文件 b89a69da→2a91a550；agent read 回看到新文字；探针/浮层残留 0 处"
+      - criterion: "AC7 自动刷新"
+        status: pass
+        evidence: "只改 frames/mobile-home.html（design.json 不动）→ 1033ms；改 design.json → 367ms；哨兵变量存活（无整页重载）；选中态保持"
+      - criterion: "AC8 批注闭环"
+        status: pass
+        evidence: "元素锚点批注带 target 选择器；design_status 完整返回；断锚后显示「未锚定…原文已保留」"
+      - criterion: "AC9 落代码"
+        status: pass
+        evidence: "降级复制卡片产出 572 字指令且真可执行 → agent 写出 src/generated/order-list/index.tsx（885 行）→ grep '.design/' 退出码 1（零引用）"
+      - criterion: "AC10 安全（失败路径）"
+        status: pass
+        evidence: "8 个攻击面全部 SecurityError；对照组（无 sandbox）真把顶层跳到 example.com；日志归属 3080 命中 8 / 8899 命中 0 / escape 警告命中 0"
+      - criterion: "AC11 边界容错"
+        status: pass
+        evidence: "服务端 2MiB 七档实测（2097152 通过 / 2097153 拒绝）；客户端五种占位自建夹具复验全过"
+      - criterion: "AC12 失败可读"
+        status: pass
+        evidence: "真实工具路径返回 ENOWRITE + 失败路径 + EACCES，无静默成功"
+    commands:
+      - "node --test src/host/*.test.js -> tests 50 / pass 50 / fail 0"
+      - "node design-system/tools/check-design-system.mjs -> 12/12 通过"
+      - "node scripts/post-restart-check.mjs -> 路由=ok 工具=3/3 数据层=ok"
+    artifacts: []
+    unverified:
+      - "附加项「自动打开」：抑制状态只能靠用户手动关闭构造，而手动关闭本身触发抑制，无法区分未实现与被正确抑制，故不下通过结论（详见 follow_up F5）"
   follow_ups:
     - "F1（中，触发条件：下一轮动 host 层时）：AC9 的「落地到项目」目前走**降级方案**——client.js 生成一段可复制的落地指令（界面原文「命令通道不可用，已降级为复制指令」），用户手动粘进对话框。主方案是 host 注册一个低频 session command（如 /design-handoff）+ 客户端用 `ctx.remote.commands.execute` 直投。降级本身 P0 可接受，但按 `prompts/design-handoff.md` 第 7 节要求必须登记在此，不得静默降级。补主方案需要重启 `dsh web` 才生效（host 模块缓存），故不在本版做。"
     - "F2（低，触发条件：发现批注锚点频繁失效时）：批注锚点是元素选择器路径，agent 重写 HTML 后可能指不到元素（当前行为：显示为「未锚定」并保留原文，不丢弃）。P1 可考虑给元素注入稳定锚点 id。"
     - "F3（低，触发条件：用户反馈改文字麻烦时）：就地改元素的文本框**失焦才保存，按 Enter 不保存**。独立验收者实测确认这是当前行为，判定为可辩护的提交语义（不是缺陷），故不在本轮修；若用户觉得别扭，改成 Enter 提交 + Esc 取消即可。"
-    - "F4（中，触发条件：用户抱怨手机稿在窄栏里看不清时）：**预览视口尺寸由右侧栏宽度决定，与 frame 声明尺寸不是一回事**（如 390×844 的手机稿在 553px 宽的栏里只占左侧、需纵向滚动）。P1 可做等比 fit-to-width；注意任何缩放都会改变指针坐标映射，必须连带回归 AC6（点元素）与 AC8（元素锚点批注）的命中与选中。"
     - "F5（中，触发条件：要给「自动打开」定论时）：「`.design/` 首次出现自动打开预览面板」**无法验证**——抑制状态只能靠「用户手动关闭面板」构造，而手动关闭本身就会触发抑制，于是无法区分「没实现」与「被正确抑制」。必须先给抑制状态一个可重置/可观测的手段才能验；在此之前该能力在 SPEC 的 verification.unverified 里如实标注。"
     - "F6（低）：批注锚点失效后，需要手动刷新才显示「未锚定」；P1 可改为文件变更时即时重算锚点。"
     - "F7（低）：切换会话时右侧栏的预览面板会消失（右侧栏布局状态跨会话延续），用户可能误以为「设计稿不见了」；P1 可记住每个会话的面板开合状态。"
