@@ -5,7 +5,7 @@
 
 ## 一句话
 
-DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真实 HTML**」为单位设计 UI；用户在右侧栏的预览面板里边聊边看，可切换屏幕、点元素就地改属性、点元素写批注，满意后由 agent 把设计落成前端代码。
+DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真实 HTML**」为单位设计 UI；用户在右侧栏的预览面板里边聊边看，可切换屏幕、点一个元素就把它的定位信息引用进聊天输入框，接着说一句要怎么改，满意后由 agent 把设计落成前端代码。
 
 ## 形态是怎么定下来的（重要，别走回头路）
 
@@ -20,6 +20,34 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 两条都成立，且第二条是真实的可用性缺陷：**左侧栏的面板列表是 root 作用域的（全局）**，而设计稿是**每个工作区各自一份**的，放在那里无法表达"这份设计属于哪个工作区"。右侧栏标签是 session 作用域的，天生跟随当前会话/工作区。
 
 成本核对（当时的数据）：画布里"无限"那部分（相机与坐标换算）约 140 行、拖动约 60 行、并排世界图层约 60 行、世界坐标批注浮层约 150 行；而沙箱渲染、探针、读写通道、变更订阅、错误提示这些是**跨形态复用**的，占了绝大多数。
+
+### 第三轮：元素属性面板与批注交互退场（v7）
+
+上一轮保留下来的「点元素就地改属性」与「点元素写批注」，用户在真实界面里点过之后也否决了：
+
+> 「点击设计元素的时候，不要弹出这个（元素属性面板），应该直接在 dsh 的会话聊天中引用这个点击的元素才对，然后用户自然就会输入要怎么调整，这样的话标注就不需要了，因为用户会直接引用元素直接和 dsh 聊天框聊天」
+
+判断：属性抽屉把"改设计"变成一张 6 个输入框的小表单（文字/颜色/字号/内外边距），而人真正想说的是自然语言（"这个按钮太土了"）。这条链路里真正缺的能力，是**把"我在说哪个元素"无损地告诉 agent**；聊天输入框是 DSH 里本来就有、用户天天在用的输入面。既然点一下就能把"说的是哪个"说清楚，再维护一套"点着元素写批注"的锚点 UI 就是同一种表达的第二套说法，没有存在理由。
+
+改动与成本（`client.js` 单文件，`git diff --numstat` = **+392 / -272**；被验版本 sha256[:16] = `7fb7b8ebadc473b0`，1821 行）：
+
+- **删掉**：`Inspector` 抽屉（旧文件 1011–1125 行，115 行：6 个属性输入框 + 批注列表 + 就这个元素写批注）、工具栏「批注（N）」入口、元素选中态 `selected`、一批只服务于它的文案 key（`fieldText` / `fieldColor` / `fieldFontSize` / `commentNew` / `commentSave` / `commentLocate` / `commentUnanchored` / `noComments` / `deselect` / `pickHint` 等）与 `rgbToHex()`，以及批注角标随缩放同步的两个发送点。
+- **新增**：会话 → 输入框动作面的注入桥（模块级 `composerInserters` + 隐藏占位 `ComposerBridge`）、引用文本构造（`buildElementReference` / `refText`，元素文字上限 `REF_TEXT_MAX = 40`）、插入函数 `insertReferenceIntoComposer`、探针的 `{cmd:'highlight'}` 脉冲高亮、预览底部的「最近引用」状态条与失败时的一键复制。
+- **一处刻意保留**：探针里给旧父页面用的批注角标代码没删（新父页面不再发 `setComments`，缩放的 `setBadgeScale` 发送点已删）——它是**兼容死代码**，不代表"批注功能还在"。两处设计理由以注释留在 `client.js`（1164 行"这里**不再有**元素属性抽屉"、1390 行"元素属性表把人逼进 6 个输入框"），下一个人问"为什么砍"时答案就在原地。
+
+**数据层零改动，这是刻意的**：`comments[]` 仍在 `.design/design.json` 里、`design_status` 仍返回它们、host 的 `add_comment` / `resolve_comment` 两个 op 仍可用——**删的是界面，不是数据**。已经写下的批注不能凭空消失；以后若要恢复某种批注视图，也不必先做数据迁移。
+
+**引用是怎么进输入框的**（技术路径在 DSH 源码里核对过，不是猜）：`@deepseek-ai/dsh-client-ui-conversation` 通过 `ctx.uiSession.provide({ props: ['inputActions'] })` 把 `InputActions` 发给每个 session 作用域的插槽组件；预览面板挂在 `sidebar.right.pane.tab`（session 级），props 上本来就有它。插件另外注册一个隐藏的 `conversation.input.dock` 占位（`ComposerBridge`，渲染 `null`）作为回落，从标准 props 取同一份 `inputActions`，按 `sessionId` 登记进 `composerInserters`；两条路都不通时预览面板给可见失败提示，不静默。
+
+**插入只有一条通道**：`captureInsertion()` 拿插入区间 → `insertText(text, span)` 写入，不碰 `setDraft`。`InputActions` 上**没有 `state`**（只有 `captureInsertion` / `insertText` / `setDraft` / `persistDraft` / `addAttachments` / `removeAttachment` / `pruneAttachments` / `submit`），所以"先读草稿内容再决定"没有数据源；草稿空不空只能读输入框 DOM——`composerDraftEmpty()` 看 `[data-composer-input]` 的 `innerText` 与引用 chip 节点（`data-composer-text-ref` / `data-lexical-decorator`）。`setDraft` 虽然能把内容写对，但会把光标留在文档开头（实测写完之后再敲字，字符会跑到整段最前面），所以不用它。
+
+`insertText` 落到 shell 自有的 Lexical 编辑器（`insertAsyncText`）上，**这个 API 不要求输入框有焦点**（≠"插入过程不会移动浏览器焦点"，见下面路障 2），一次插入算一步撤销；span 带 `draftRev` 校验，只在版本未变且编辑器可写时生效（该包 README 的原话是"异步消费者在插入被拒绝后负责保留结果，等待用户操作"）。所以用户正好在打字时这次插入会被拒——`insertReferenceIntoComposer` 重试一次拿新 rev，两次都失败就在面板里报出可见原因，并把引用文本留给用户复制。
+
+**两个必须记住的路障**（都真踩过）：
+
+1. **输入框失焦时 `captureInsertion()` 返回 `{start: 0, end: 0}`** —— 那是"没有选区"的默认值，**不等于文档为空**。拿它判空草稿，两条引用就会首尾相粘（少了分隔符）。判空要用 `composerDraftEmpty()`，分隔符规则只有一条：**草稿非空就前置一个换行**。
+2. **"不主动聚焦"不等于"焦点不会变"**：`insertText` 之后编辑器会把选区留在文档开头，用户接着敲字会跑到引用前面去（实测 `ZZ【设计元素】…`）。所以插入成功后要显式把光标收拢到草稿末尾（`collapseComposerCaretToEnd()`，纯 DOM `Range`，同步 + `rAF` + 60ms 各做一次，**依然不调 `focus()`**；实测随后敲字落在末尾 `REF-1ZZ`）。只做一次不够——Lexical 提交 DOM 更新与聚焦时的 reconciliation 都可能把选区改回去。
+   **最终口径（Lead 2026-10-09 裁定，别再改回去）**：插入路径**不调用 `focus()`、不滚动、不跳视口**；为了让用户"引用完接着打字"落在末尾，**会主动把编辑器选区收拢到文档末尾，输入框因此成为 `document.activeElement`**——这是为达成用户诉求付的、且刻意选择的一步，**不是缺陷**。AC3 的判据也据此改成"不打断、可接着写"（不滚动/不跳视口、草稿一字不丢、光标落在末尾、一次撤销可恢复），`activeElement` 不再计入验收（见 SPEC v3 与 `docs/verification-element-reference-to-composer.md` §3.3）。**文档里不要写"不抢焦点"**，写"不主动聚焦 + 收拢选区到末尾"。
 
 ## 三条不可动摇的产品取舍
 
@@ -62,6 +90,7 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 | Agent 工具 | host `ctx.tools.register` | 手写 JSON Schema，不引入 `@deepseek-ai/dsh-tools` |
 | 设计约定 | host `ctx.systemPrompt.section` | 正文来自 `prompts/design-conventions.md`，读不到时用内置兜底 |
 | 写回 | host `ctx.webServer.register`（exact route） | 见下节 |
+| 引用进对话 | client `conversation.input.dock` 隐藏占位（`ComposerBridge`，session 级标准 props `inputActions`） | 只做一件事：把该会话的 `insertText` 登记进 `composerInserters`；插入落在 shell 的 Lexical 编辑器上，失败必须可见。**注意**：插入后会把选区收拢到草稿末尾（让用户接着打字落在末尾），输入框因此成为 `document.activeElement`——刻意选择，见上"路障 2" |
 | 文件变更通知 | 客户端 `workspaceFiles.changes` 流 + 定期 stat 轮询 | 单向：host 写文件 → 客户端感知 → 刷新，不另造推送通道 |
 
 **已废弃的挂载点（不要再加回来）**：`sidebar.panellist`（左侧栏全局入口）与 `main`（全屏主面板座位）。原因是全局面板列表无法表达"这份设计属于哪个工作区"。
@@ -70,6 +99,7 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 
 - `openTab` 本身就会 reveal 右侧栏，**打开标签不需要额外调 `openRightbar`**；只有「放大」才需要。
 - `dsh-fs-local` 对目录的监听参数是 `{ ignoreInitial: true, depth: 0 }`，**只监听 `.design` 收不到 `.design/frames/*.html` 的变更**。所以刷新用的是"changes 流 + 定期 stat"双保险，两处都要留着。
+- `insertText` 的 span 带 `draftRev`：**capture 与 insert 之间用户只要敲了字，这次插入就会被拒**。这不是 bug，是设计（拒绝比覆盖用户草稿安全），正确处理是重新 capture 重试一次；两次都失败才走可见失败分支。
 
 ## 写通道与安全模型
 
@@ -103,13 +133,13 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 
 | 工具 | 作用 |
 |---|---|
-| `design_status` | 无副作用。返回工程、frames、tokens、**未处理批注**、当前选中项。agent 动手前应先调它。 |
+| `design_status` | 无副作用。返回工程、frames、tokens、**未处理批注（v7 起是历史数据，可能为空）**、当前选中项。agent 动手前应先调它。 |
 | `design_frame_write` | 新建或覆写一屏（`id/name/html/width/height/x/y`），返回 `{id, file, bytes}`。 |
 | `design_canvas_apply` | 应用一组画布操作。词表：`add_frame / move_frame / resize_frame / rename_frame / delete_frame / switch_tokens / add_comment / resolve_comment / set_viewport / select`；**未知操作整批拒绝**（`EUNKNOWN`），不做部分应用。 |
 
 改某一屏的页面内容也可以**直接用 read/write/edit 改 `.design/frames/<id>.html`**——预览面板会自动刷新，不必绕工具。
 
-**UI 不再调用的 op**（保留以兼容与复用，别当漏接）：`move_frame`、`set_viewport`；`add_frame` 的 `x/y` 也不再影响任何布局。
+**UI 不再调用的 op**（保留以兼容与复用，别当漏接）：`move_frame`、`set_viewport`；v7 起再加上 `add_comment`、`resolve_comment`（画布不再有写批注的界面，但工具调用与历史数据仍然可用）；`add_frame` 的 `x/y` 也不再影响任何布局。
 
 唯一允许的例外：`design_status` 在发现 `design.json` 非法时，会按 AC11 把它备份成 `design.json.bak`（这是错误恢复的必要写入，不算违反"无副作用"）。
 
@@ -147,7 +177,7 @@ POST /design-canvas/api            （exact、同源）
 `design.json` 的 `tokens` 字段是 `tokens.css` 的只读镜像，解析规则：去掉 `--` 后把第一个 `-` 换成 `.`
 （`--color-primary` → `color.primary`，`--space-2` → `space.2`）。三套预设各 56 个变量，切换预算是整块替换、页面样式一行不改。
 
-**批注锚点**：v5 起 `comments[].target` 是元素选择器路径，`x/y` 写 0、不再承担定位语义。选择器在 agent 重写 HTML 后可能失效——此时该批注显示为「未锚定」并保留原文，**不静默丢弃**（见 SPEC follow_up F2）。
+**批注锚点**：v5 起 `comments[].target` 是元素选择器路径，`x/y` 写 0、不再承担定位语义。v7 起画布既不能写批注也不展示批注，这些字段只对 agent 有意义（`design_status` 会把原文与 `target` 一起读出来）；选择器在 agent 重写 HTML 后可能失效，**读到的锚点要自己用标签名 + 文字在文件里核对**，别默认它还准（见 SPEC follow_up F2）。
 
 **不再被 UI 使用的字段**：`viewport`、`frames[].x/y`（保留仅为向后兼容）。
 
@@ -180,7 +210,8 @@ node scripts/post-restart-check.mjs               # 重启后：路由 / 工具 
 ```
 
 - 端到端：GUI `http://127.0.0.1:3080`（`dsh web` 启动时打印的 URL 带一次性 token；直接访问 `/` 会 401，重启后 token 会变）。
-- 独立验收报告：`docs/verification-feature-dsh-design-canvas.md`。
+- 画布形态的独立验收报告：`docs/verification-feature-dsh-design-canvas.md`。
+- 元素引用形态的验收报告：`docs/verification-element-reference-to-composer.md`（其中「独立复验结论」小节由未参与实现的验收者填写）。
 - 沙箱验证要点：劫持帧的 `window.origin` 应为 `null`；控制台**不得**出现 Chrome 的 `can escape its sandboxing` 警告（出现即说明 `allow-same-origin` 被加上了）。
 
 ## 版本控制：`.design/` 该不该提交？

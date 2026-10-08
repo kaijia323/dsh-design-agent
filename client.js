@@ -58,14 +58,13 @@ window.__ModuleLoader__.load({
       emptyHint: '在对话里说一句，例如「设计一个 SaaS 后台的订单列表页」，DSH 会帮你生成第一屏。', emptyReload: '重新读取工程', loading: '正在读取 .design 工程…',
       noSession: '当前没有可用的会话，无法定位 .design 工程。', frameEmpty: '这一帧是空文件', frameMissing: '这一帧还没有文件',
       frameUnreadable: '这一帧读不出来', frameTooLarge: '内容过大，已拒绝渲染', frameTimeout: '渲染超时：帧内脚本可能卡死了',
-      reloadFrame: '重新加载这一屏', fitWidth: '适应宽度', pickHint: '在预览里点一个元素，可以改它的属性，或就它写一条批注。', props: '元素属性',
-      fieldText: '文字', fieldColor: '文字颜色', fieldBackground: '背景色',
-      fieldFontSize: '字号', fieldPadding: '内边距', fieldMargin: '外边距',
-      commentNew: '就这个元素写批注', commentPlaceholder: '例如：这个按钮太土了', commentSave: '保存批注',
-      commentCancel: '取消', comments: '批注', commentResolve: '标记已处理',
-      commentResolved: '已处理', commentLocate: '定位', commentUnanchored: '未锚定',
-      commentUnanchoredHint: '找不到这个选择器指向的元素（HTML 可能被重写过），原文已保留。', noComments: '这一屏还没有批注。', close: '收起',
-      deselect: '取消选中', handoffTitle: '落地到项目', handoffHint: '命令通道不可用，已降级为复制指令。把下面这段粘进对话框即可。',
+      reloadFrame: '重新加载这一屏', fitWidth: '适应宽度',
+      refLabel: '最近引用', refCopy: '复制引用', refCopied: '已复制引用',
+      refEmpty: '点一个元素，它的位置信息就会自动引用进对话输入框（还没引用过）。',
+      refInsertedHint: '已插入对话输入框，接着打一句要改什么就行（发送前还能改）。',
+      refFailed: '引用没能插进对话输入框：',
+      refFallbackHint: '把这行复制到对话输入框即可。', refNoSession: '找不到聊天输入框：会话可能没打开，或输入框当前被禁用。',
+      close: '收起', handoffTitle: '落地到项目', handoffHint: '命令通道不可用，已降级为复制指令。把下面这段粘进对话框即可。',
       copy: '复制', copied: '已复制', opsFailed: '操作未保存：',
       rolledBack: '已回滚为磁盘上的内容。', readFailed: '读取失败：', writeFailed: '写入失败：',
       handoffSent: '已把落地指令投进对话。',
@@ -93,6 +92,156 @@ window.__ModuleLoader__.load({
       const error = { code: code || 'EUNKNOWN', message: message || '未知错误' };
       if (path) error.path = path;
       return { ok: false, error: error };
+    }
+
+    // -------------------------------------------------- 引用文本 / 输入框注入表
+
+    /** 引用里元素文字的长度上限：引用是"指路"，不是"复述整段文案"。 */
+    const REF_TEXT_MAX = 40;
+
+    /** 归一化空白并截断：引用文本必须定长可读，不能被元素里的换行/空行撑破。 */
+    function refText(raw, max) {
+      const flat = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+      const limit = Number.isFinite(max) && max > 0 ? max : REF_TEXT_MAX;
+      return flat.length > limit ? flat.slice(0, limit) + '…' : flat;
+    }
+
+    /**
+     * 把一个点选到的元素折成"贴进对话输入框的那段话"。
+     *
+     * 只写定位必需的五样：哪一屏、什么元素、选择器、当前文字、在哪个文件。
+     * 刻意不带颜色/字号/内外边距——用户要点评的是元素本身，把计算样式铺进去只会
+     * 让引用变成一张属性表，还把对话输入框撑长（这正是被砍掉的属性面板的毛病）。
+     * 不写 Markdown 反引号：这里的目标是"人能读、agent 能 grep"，反引号只会添噪。
+     */
+    function buildElementReference(frame, info) {
+      const safe = info && typeof info === 'object' ? info : {};
+      const tag = String(safe.tag || '').trim() || '(未知元素)';
+      const path = String(safe.path || '').trim();
+      const text = refText(safe.text);
+      const name = frame && frame.name ? String(frame.name) : frame && frame.id ? String(frame.id) : '未命名屏';
+      const id = frame && frame.id ? String(frame.id) : '';
+      return [
+        '【设计元素】' + name + (id ? '（frame: ' + id + '）' : ''),
+        '元素：' + tag,
+        '选择器：' + (path || '(没有拿到选择器)'),
+        '当前文字：' + (text || '(这个元素没有文字)'),
+        '文件：' + (frame ? framePath(frame) : '.design/（未知文件）'),
+      ].join('\n');
+    }
+
+    /**
+     * 会话 → 输入框动作面（`InputActions`）。
+     *
+     * 为什么需要这张表：插入文本的能力（`insertText`）属于**聊天列自己的**会话作用域插槽，
+     * 而预览面板挂在右侧栏，两者只有"当前会话"这一个共同点。桥（见 `ComposerBridge`）
+     * 会在聊天列上登记一份，预览面板优先用自己 props 上的，拿不到时回落到这里。
+     */
+    const composerInserters = {
+      map: new Map(),
+      register(sessionId, actions) {
+        if (!sessionId || !actions) return () => undefined;
+        this.map.set(sessionId, actions);
+        return () => {
+          if (this.map.get(sessionId) === actions) this.map.delete(sessionId);
+        };
+      },
+      get(sessionId) {
+        return (sessionId && this.map.get(sessionId)) || null;
+      },
+      /** 故障注入点：验收者用它构造"输入框动作面不可用"，走可见失败分支。 */
+      clear() {
+        this.map.clear();
+      },
+    };
+
+    /**
+     * 引用文本插进聊天输入框时，草稿非空要补的分隔符。
+     *
+     * 读的是输入框 DOM 的**空/非空**，不是它的内容：内容投影要处理引用 chip 与换行，容易出错，
+     * 而我们只需要一个布尔量。空判断覆盖两件事——有没有文字节点、有没有引用 chip
+     * （`data-composer-text-ref` / `data-lexical-decorator`），只算其中之一会把"只有 chip 的草稿"
+     * 误判成空。
+     */
+    function composerDraftEmpty() {
+      if (typeof document === 'undefined') return true;
+      const box = document.querySelector('[data-composer-input]');
+      if (!box) return true;
+      if (typeof box.innerText === 'string' && box.innerText.trim() !== '') return false;
+      return box.querySelectorAll('[data-composer-text-ref], [data-lexical-decorator]').length === 0;
+    }
+
+    /**
+     * 把输入框的光标收拢到草稿末尾（**不聚焦**，所以不会把用户的视线从预览里抢走）。
+     *
+     * 为什么必须手动做这一步：插入走的是 `insertText`，而编辑器在没有焦点时插入完会把选区
+     * 留在文档开头（实测：插入后再敲字变成 `ZZ【设计元素】…`）。纯 DOM 地设置 Range 就够——
+     * 实测敲字会落在末尾（`REF-1ZZ`），Lexical 会认这个选区。
+     *
+     * 放在 rAF 里：`insertText` 之后 Lexical 自己还要提交一次 DOM 更新，抢在它前面设选区会被覆盖。
+     */
+    function collapseComposerCaretToEnd() {
+      if (typeof window === 'undefined' || typeof document === 'undefined') return;
+      const move = () => {
+        const box = document.querySelector('[data-composer-input]');
+        const selection = typeof window.getSelection === 'function' ? window.getSelection() : null;
+        if (!box || !selection) return;
+        const range = document.createRange();
+        range.selectNodeContents(box);
+        range.collapse(false);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      };
+      // 立刻做一次（插入返回时选区正好在文档开头，先把它拨到末尾），再补两次：
+      // Lexical 提交 DOM 更新与聚焦时的 reconciliation 都可能把选区改回去，只做一次不够。
+      try {
+        move();
+      } catch (error) {
+        /* 选区不可写时忽略：光标落点只影响体验，不影响引用是否插进去 */
+      }
+      if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(move);
+      window.setTimeout(move, 60);
+    }
+
+    /**
+     * 把引用文本**追加**到聊天输入框草稿末尾。
+     *
+     * 只走 `captureInsertion()` + `insertText()`，不碰 `setDraft`。
+     *
+     * 两条实测教训（别退回去，退了就会出这两个坑）：
+     * 1. `InputActions` **没有 `state`**（只有 captureInsertion / insertText / setDraft / persistDraft
+     *    / addAttachments / removeAttachment / pruneAttachments / submit），所以"读一下草稿再决定"
+     *    这条路没有数据源；草稿是否为空只能从输入框 DOM 的空/非空来判（见 {@link composerDraftEmpty}）。
+     * 2. `setDraft` 虽然能把内容写对，但它会把光标留在文档开头：实测写完之后再敲字，字符会跑到
+     *    整段草稿最前面（`ZZBEFORE…`）。`insertText` 则会把插入点留在写入内容之后，正好接上
+     *    "用户接着打字往下一行写"。
+     *
+     * 分隔符规则：草稿非空就前置一个换行。输入框失焦时 `captureInsertion()` 给的是"没有选区"的
+     * 默认值，不能拿它当"文档为空"的证据——这正是上一版两条引用首尾相粘的根因。
+     *
+     * 注意：**不调 `focus()`**。用户点元素时视线在预览里，抢焦点等于把输入位置从他手里拿走；
+     * 引用只是把稿子备好，用户自己点一下输入框接着写。
+     *
+     * @returns {{ok: true} | {ok: false, reason: string}}
+     */
+    function insertReferenceIntoComposer(actions, text) {
+      if (!actions || typeof actions.captureInsertion !== 'function' || typeof actions.insertText !== 'function') {
+        return { ok: false, reason: '输入框动作面不可用' };
+      }
+      const separator = composerDraftEmpty() ? '' : '\n';
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const span = actions.captureInsertion();
+          if (!span) break;
+          if (actions.insertText(separator + text, span) === true) {
+            collapseComposerCaretToEnd();
+            return { ok: true };
+          }
+        } catch (error) {
+          return { ok: false, reason: msgOf(error) };
+        }
+      }
+      return { ok: false, reason: '插入被拒绝（输入框正在提交或被锁定）' };
     }
 
     /** 空工程：首次读取前、以及 design.json 损坏时使用。 */
@@ -244,6 +393,23 @@ window.__ModuleLoader__.load({
       '    return;',
       '  }',
       '  if(d.cmd==="clearSelection"){ selected=null; return; }',
+      '  // 引用高亮：点选成功后由父页面点名脉冲一次，让用户看见"引用的是这个"。',
+      '  // 用 rAF 自己衰减，不依赖 CSS 动画，也不往用户的设计文件里留任何痕迹。',
+      '  if(d.cmd==="highlight"){',
+      '    var target=null; try{ target = d.value ? document.querySelector(d.value) : selected; }catch(e){ target=null; }',
+      '    if(!target) return;',
+      '    var prevOutline=target.style.outline, prevOffset=target.style.outlineOffset, t0=0;',
+      '    var step=function(ts){',
+      '      if(!t0) t0=ts;',
+      '      var k=Math.max(0, 1-(ts-t0)/520);',
+      '      if(k<=0){ target.style.outline=prevOutline; target.style.outlineOffset=prevOffset; return; }',
+      '      target.style.outline="3px solid rgba(76,141,255,"+(0.25+0.75*k).toFixed(3)+")";',
+      '      target.style.outlineOffset=Math.round(2*k)+"px";',
+      '      requestAnimationFrame(step);',
+      '    };',
+      '    requestAnimationFrame(step);',
+      '    return;',
+      '  }',
       '  if(!selected) return;',
       '  if(d.cmd==="setText"){ selected.textContent = d.value; }',
       '  else if(d.cmd==="setStyle"){ try{ selected.style[d.prop] = d.value; }catch(e){} }',
@@ -763,16 +929,6 @@ window.__ModuleLoader__.load({
       );
     }
 
-    /** `rgb()/rgba()` 转 `#rrggbb`，转不了返回 null。 */
-    function rgbToHex(value) {
-      const text = String(value || '').trim();
-      if (/^#[0-9a-f]{6}$/i.test(text)) return text.toLowerCase();
-      const match = text.match(/^rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/i);
-      if (!match) return null;
-      const hex = (part) => Number(part).toString(16).padStart(2, '0');
-      return '#' + hex(match[1]) + hex(match[2]) + hex(match[3]);
-    }
-
     // -------------------------------------------------------------- 预览画布
 
     /**
@@ -782,7 +938,7 @@ window.__ModuleLoader__.load({
      * 那是 AC10 的红线，已独立验收，不要动。
      */
     function PreviewFrame(props) {
-      const { frame, doc, reloadToken, onReload, onSelectElement, onElementChanged, onCommentClick, onAnchors, registerCommand, t } = props;
+      const { frame, doc, reloadToken, onReload, onSelectElement, registerCommand, t } = props;
       const iframeRef = React.useRef(null);
       /** 被测量的滚动容器：它的 clientWidth 决定缩放比。 */
       const hostRef = React.useRef(null);
@@ -843,16 +999,6 @@ window.__ModuleLoader__.load({
           if (!data || data.__dshDesign !== 1) return;
           if (data.type === 'ready') {
             setStatus('ok');
-            // 探针此刻一定在监听（它刚发完 ready），这是补发缩放比最可靠的时机：
-            // iframe 每次重挂载，探针里的 badgeScale 都会回到 1，必须在这里重发。
-            // 直接用 event.source（就是那个 contentWindow），不绕 ref，避免时序问题。
-            try {
-              if (event.source && typeof event.source.postMessage === 'function') {
-                event.source.postMessage({ __dshDesignCmd: true, cmd: 'setBadgeScale', scale: scaleRef.current }, '*');
-              }
-            } catch (error) {
-              /* 帧可能已经没了，忽略 */
-            }
             if (data.sandbox) {
               const f = data.sandbox;
               // 帧自己测过边界；把结论打到页面控制台，AC10 要的就是这条拦截痕迹。
@@ -865,17 +1011,14 @@ window.__ModuleLoader__.load({
             }
             return;
           }
-          if (data.type === 'select') return void (onSelectElement && onSelectElement(frame.id, data.info || null));
-          if (data.type === 'changed') {
+          if (data.type === 'select') {
             setStatus('ok');
-            return void (onElementChanged && onElementChanged(frame.id, typeof data.html === 'string' ? data.html : '', data.info || null));
+            return void (onSelectElement && onSelectElement(frame.id, data.info || null));
           }
-          if (data.type === 'commentClick') return void (onCommentClick && onCommentClick(data.id));
-          if (data.type === 'commentAnchors') return void (onAnchors && onAnchors(frame.id, data.anchored || [], data.missing || []));
         };
         window.addEventListener('message', onMessage);
         return () => window.removeEventListener('message', onMessage);
-      }, [frame.id, reloadToken, renderable, onSelectElement, onElementChanged, onCommentClick, onAnchors]);
+      }, [frame.id, reloadToken, renderable, onSelectElement]);
 
       /** 给帧内探针发指令；改动会以 `changed` 回传整篇文档。 */
       const command = React.useCallback((payload) => {
@@ -893,22 +1036,8 @@ window.__ModuleLoader__.load({
         return () => registerCommand(frame.id, null);
       }, [frame.id, command, registerCommand]);
 
-      // 最新缩放比。消息 handler 的依赖数组里没有 scale，闭包会拿到旧值，所以走 ref。
-      const scaleRef = React.useRef(scale);
-      React.useEffect(() => {
-        scaleRef.current = scale;
-      }, [scale]);
-
-      // 缩放开度变化时同步给探针。
-      //
-      // 注意：这个 effect 在 iframe 刚挂载、探针还没执行时也会跑，那条消息会被丢掉
-      // （没人监听）。所以**可靠性不能只靠它** —— 探针每次 post `ready` 时由 handler
-      // 直接补发一次（见上面 ready 分支），那才是"探针确实在听"的确切时机。
-      React.useEffect(() => {
-        if (!renderable) return;
-        command({ cmd: 'setBadgeScale', scale: scale });
-      }, [scale, renderable, command]);
-
+      // 说明：这里曾经有一个"把缩放比同步给帧内批注角标"的 effect（`setBadgeScale`）。
+      // 批注角标随批注 UI 一并退场，缩放不再需要通知帧内任何东西——帧只负责渲染和回报点选。
       const placeholder = (label, hint) =>
         h(
           'div',
@@ -1005,133 +1134,38 @@ window.__ModuleLoader__.load({
       );
     }
 
-    // ------------------------------------------------------------ 元素检查器
+    // -------------------------------------------------------- 聊天输入框桥
 
-    /** 抽屉：改元素属性 + 就这个元素写批注 + 当前屏批注列表。未选中元素时不占宽度。 */
-    function Inspector({ frame, info, comments, anchoring, command, onDeselect, onSaveComment, onResolveComment, onFocusComment, t }) {
-      const [text, setText] = React.useState('');
-      const [color, setColor] = React.useState('#000000');
-      const [background, setBackground] = React.useState('#ffffff');
-      const [fontSize, setFontSize] = React.useState('');
-      const [padding, setPadding] = React.useState('');
-      const [margin, setMargin] = React.useState('');
-      const [draft, setDraft] = React.useState('');
-      const [showCommentBox, setShowCommentBox] = React.useState(false);
-
+    /**
+     * 隐藏占位：把「这一会话的聊天输入框动作面」交给预览面板。
+     *
+     * 为什么需要它：插入引用靠 `inputActions.insertText`，而它属于**聊天列自己的**会话
+     * 作用域插槽；预览面板在右侧栏，两者只共享"当前会话"。这个占位挂在
+     * `conversation.input.dock`（聊天输入框上方的会话级插槽），拿到动作面后按 sessionId
+     * 登记进 `composerInserters`，预览面板再取用。渲染 `null`：它不该被看见。
+     *
+     * 注意：`inputActions` 是会话作用域的标准 props，本来也会直接发给预览面板；
+     * 这份登记是**回落**，两条路都不通时预览面板会给出可见的失败提示，不会静默。
+     */
+    function ComposerBridge({ sessionId, inputActions, onRegister }) {
       React.useEffect(() => {
-        if (!info) return;
-        setText(typeof info.text === 'string' ? info.text : '');
-        setColor(rgbToHex(info.color) || '#000000');
-        setBackground(rgbToHex(info.background) || '#ffffff');
-        setFontSize(info.fontSize || '');
-        setPadding(info.padding || '');
-        setMargin(info.margin || '');
-        setShowCommentBox(false);
-        setDraft('');
-      }, [info]);
-
-      const inputStyle = {
-        flex: 1,
-        minWidth: 0,
-        height: 24,
-        padding: '0 6px',
-        fontSize: 12,
-        boxSizing: 'border-box',
-        borderRadius: 5,
-        border: '1px solid ' + BORDER,
-        background: 'var(--dsw-alias-bg-base, transparent)',
-        color: 'var(--dsw-alias-label-primary, inherit)',
-      };
-      const row = (label, control) =>
-        h('label', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, marginBottom: 6 } },
-          h('span', { style: { width: 62, flex: 'none', opacity: 0.75 } }, label), control);
-
-      return h(
-        'div',
-        {
-          style: { position: 'absolute', top: 8, right: 8, bottom: 8, width: 250, zIndex: 5, display: 'flex', flexDirection: 'column', overflowY: 'auto', padding: 10, boxSizing: 'border-box', borderRadius: 8, border: '1px solid ' + BORDER, background: 'var(--dsw-alias-bg-layer-3, rgba(30,30,36,0.97))', color: 'var(--dsw-alias-label-primary, inherit)', boxShadow: '0 8px 26px rgba(0,0,0,0.35)', },
-        },
-        h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 } },
-          h('span', { style: { fontSize: 12, fontWeight: 600, flex: 1 } }, t('props')),
-          h('button', {
-            type: 'button',
-            onClick: onDeselect,
-            title: t('deselect'),
-            style: { border: 'none', background: 'transparent', color: 'inherit', cursor: 'pointer', fontSize: 13, lineHeight: 1 },
-          }, '×'),
-        ),
-        info
-          ? h(
-              'div',
-              null,
-              h('div', { style: { fontSize: 11, opacity: 0.7, marginBottom: 8, wordBreak: 'break-all', lineHeight: 1.5 } },
-                (frame.name || frame.id) + ' · ' + info.tag + '\n' + (info.path || '')),
-              row(t('fieldText'), h('textarea', {
-                value: text,
-                rows: 3,
-                onChange: (event) => setText(event.target.value),
-                onBlur: () => command({ cmd: 'setText', value: text }),
-                style: Object.assign({}, inputStyle, { height: 'auto', padding: '4px 6px', resize: 'vertical', lineHeight: 1.5 }),
-              })),
-              row(t('fieldColor'), h('input', { type: 'color', value: color, onChange: (e) => { setColor(e.target.value); command({ cmd: 'setStyle', prop: 'color', value: e.target.value }); }, style: { width: 34, height: 24, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' } })),
-              row(t('fieldBackground'), h('input', { type: 'color', value: background, onChange: (e) => { setBackground(e.target.value); command({ cmd: 'setStyle', prop: 'backgroundColor', value: e.target.value }); }, style: { width: 34, height: 24, padding: 0, border: 'none', background: 'transparent', cursor: 'pointer' } })),
-              row(t('fieldFontSize'), h('input', { value: fontSize, onChange: (e) => setFontSize(e.target.value), onBlur: () => command({ cmd: 'setStyle', prop: 'fontSize', value: fontSize }), style: inputStyle })),
-              row(t('fieldPadding'), h('input', { value: padding, onChange: (e) => setPadding(e.target.value), onBlur: () => command({ cmd: 'setStyle', prop: 'padding', value: padding }), style: inputStyle })),
-              row(t('fieldMargin'), h('input', { value: margin, onChange: (e) => setMargin(e.target.value), onBlur: () => command({ cmd: 'setStyle', prop: 'margin', value: margin }), style: inputStyle })),
-              showCommentBox
-                ? h('div', { style: { marginTop: 6 } },
-                    h('textarea', {
-                      autoFocus: true,
-                      rows: 3,
-                      value: draft,
-                      placeholder: t('commentPlaceholder'),
-                      onChange: (e) => setDraft(e.target.value),
-                      style: Object.assign({}, inputStyle, { width: '100%', height: 'auto', padding: '5px 6px', resize: 'vertical', lineHeight: 1.5 }),
-                    }),
-                    h('div', { style: { display: 'flex', gap: 6, marginTop: 6 } },
-                      h(ToolButton, {
-                        disabled: draft.trim().length === 0,
-                        onClick: () => { onSaveComment(info.path, draft.trim()); setDraft(''); setShowCommentBox(false); },
-                      }, t('commentSave')),
-                      h(ToolButton, { onClick: () => { setShowCommentBox(false); setDraft(''); } }, t('commentCancel')),
-                    ),
-                  )
-                : h('div', { style: { marginTop: 6 } }, h(ToolButton, { onClick: () => setShowCommentBox(true) }, t('commentNew'))),
-            )
-          : h('div', { style: { fontSize: 12, opacity: 0.7, lineHeight: 1.6 } }, t('pickHint')),
-        h(
-          'div',
-          { style: { marginTop: 10, paddingTop: 10, borderTop: '1px solid ' + BORDER } },
-          h('div', { style: { fontSize: 12, fontWeight: 600, marginBottom: 6 } }, t('comments') + '（' + comments.filter((c) => !c.resolved).length + '）'),
-          comments.length === 0
-            ? h('div', { style: { fontSize: 12, opacity: 0.65 } }, t('noComments'))
-            : comments.map((comment) => {
-                const unanchored = comment.target && anchoring.missing.indexOf(comment.id) >= 0;
-                return h(
-                  'div',
-                  { key: comment.id, style: { fontSize: 12, padding: '6px 0', borderTop: '1px solid ' + BORDER, opacity: comment.resolved ? 0.5 : 1, lineHeight: 1.55 } },
-                  h('div', { style: { whiteSpace: 'pre-wrap', wordBreak: 'break-word' } }, comment.text),
-                  h('div', { style: { opacity: 0.6, marginTop: 2, fontSize: 11 } }, comment.resolved ? t('commentResolved') : ''),
-                  // 锚点失效绝不静默丢弃：原文照留，并说明原因。
-                  unanchored ? h('div', { style: { opacity: 0.6, fontSize: 11, lineHeight: 1.5, marginTop: 2 } }, t('commentUnanchored') + '：' + t('commentUnanchoredHint')) : null,
-                  h('div', { style: { display: 'flex', gap: 6, marginTop: 4 } },
-                    comment.target ? h(ToolButton, { onClick: () => onFocusComment(comment) }, t('commentLocate')) : null,
-                    comment.resolved ? null : h(ToolButton, { onClick: () => onResolveComment(comment.id) }, t('commentResolve')),
-                  ),
-                );
-              }),
-        ),
-      );
+        if (!sessionId || !inputActions) return undefined;
+        return onRegister(sessionId, inputActions);
+      }, [sessionId, inputActions, onRegister]);
+      return null;
     }
 
     // -------------------------------------------------------------- 预览主体
 
     /**
-     * 预览面板：单屏渲染 + 切屏 + 刷新 + 就地改 + 元素锚点批注 + 落地。
+     * 预览面板：单屏渲染 + 切屏 + 刷新 + 点元素引用进对话 + 落地。
      * 按 `sessionId` 定位当前工作区的 `.design/`，所以它天然跟着当前会话走。
+     *
+     * 这里**不再有"元素属性"抽屉**：点元素的语义是"我要就这个元素说句话"，
+     * 落脚点必须是聊天输入框（用户原话：不要弹这个，直接在聊天框里引用这个元素）。
      */
     function Preview(props) {
-      const { ctx, bridge, sessionId, t, onOpened } = props;
+      const { ctx, bridge, sessionId, t, onOpened, inputActions, onPreviewReady } = props;
 
       const [project, setProject] = React.useState(null);
       const [doc, setDoc] = React.useState(null);
@@ -1141,8 +1175,9 @@ window.__ModuleLoader__.load({
       const [notice, setNotice] = React.useState(null);
       const [currentId, setCurrentId] = React.useState(null);
       const [reloadToken, setReloadToken] = React.useState(0);
-      const [selected, setSelected] = React.useState(null);
-      const [anchoring, setAnchoring] = React.useState({ anchored: [], missing: [] });
+      /** 最近一次引用：{ frameId, frameName, tag, path, text, reference }。 */
+      const [lastRef, setLastRef] = React.useState(null);
+      const [refCopied, setRefCopied] = React.useState(false);
       const [handoffText, setHandoffText] = React.useState(null);
       const [copied, setCopied] = React.useState(false);
 
@@ -1151,6 +1186,9 @@ window.__ModuleLoader__.load({
       const commandsRef = React.useRef(new Map());
       const currentIdRef = React.useRef(null);
       const sessionRef = React.useRef(null);
+      /** 上面 props 上的动作面优先；它是会话作用域标准 props，理论上总是有。 */
+      const inputActionsRef = React.useRef(null);
+      inputActionsRef.current = inputActions && typeof inputActions.insertText === 'function' ? inputActions : null;
 
       React.useEffect(() => {
         currentIdRef.current = currentId;
@@ -1173,15 +1211,9 @@ window.__ModuleLoader__.load({
 
       const frames = project && project.frames ? project.frames : [];
       const currentFrame = frames.find((frame) => frame.id === currentId) || null;
-      const comments = React.useMemo(
-        () => (project && project.comments ? project.comments : []).filter((comment) => comment.frameId === currentId),
-        [project, currentId],
-      );
-      // 只按内容签名重发角标清单；否则 comments 的数组身份每次都变，会自激成渲染死循环。
-      const commentSig = React.useMemo(
-        () => comments.filter((comment) => !comment.resolved).map((comment) => comment.id + '|' + comment.target).join('~'),
-        [comments],
-      );
+
+      /** 拿当前会话的输入框动作面：props 优先，桥的登记回落。 */
+      const actionsNow = React.useCallback(() => inputActionsRef.current || composerInserters.get(sessionRef.current), []);
 
       // ----------------------------------------------------------- 读取
 
@@ -1296,18 +1328,6 @@ window.__ModuleLoader__.load({
         };
       }, [bridge, sessionId, ready, load, report]);
 
-      // 把当前屏未处理的批注送进帧内画角标。
-      React.useEffect(() => {
-        const command = currentId ? commandsRef.current.get(currentId) : null;
-        if (!command) return;
-        command({
-          cmd: 'setComments',
-          comments: comments
-            .filter((comment) => !comment.resolved)
-            .map((comment) => ({ id: comment.id, target: comment.target || '', text: comment.text })),
-        });
-      }, [commentSig, currentId, doc]);
-
       // ----------------------------------------------------------- 写入
 
       const commit = React.useCallback(
@@ -1337,8 +1357,8 @@ window.__ModuleLoader__.load({
         (frameId) => {
           if (!frameId || frameId === currentId) return;
           setCurrentId(frameId);
-          setSelected(null);
-          setAnchoring({ anchored: [], missing: [] });
+          setLastRef(null);
+          setRefCopied(false);
           if (!sessionId) return;
           // 切屏本身不阻塞用户，但写入失败仍要可见（AC12）——只是不打断切换。
           void bridge.applyCanvasOps(sessionId, [{ op: 'select', frameId: frameId }]).then((result) => {
@@ -1363,62 +1383,97 @@ window.__ModuleLoader__.load({
         else commandsRef.current.delete(frameId);
       }, []);
 
-      const onElementChanged = React.useCallback(
-        (frameId, html, info) => {
-          setDoc({ text: html, bytes: byteLength(html) });
-          if (info) setSelected({ frameId: frameId, info: info });
+      /**
+       * 点选元素 = 引用进对话。整套交互的核心就这一段。
+       *
+       * 为什么不做"就地改属性"：用户看完成品明确否决了那个抽屉（"不要弹这个，
+       * 应该在聊天框里引用这个元素，然后直接说要怎么改"）。元素属性表把人逼进
+       * 6 个输入框，而人真正要说的是"这个按钮太土了"；把定位信息送进输入框，
+       * 再把话语权还给聊天，才是这条链路该有的形状。
+       *
+       * 失败一律可见：插不进去就把引用文本摆出来让用户复制，绝不静默。
+       */
+      const onSelectElement = React.useCallback(
+        (frameId, info) => {
           const frame = projectRef.current && projectRef.current.frames ? projectRef.current.frames.find((item) => item.id === frameId) : null;
-          if (!frame || !sessionId) return;
-          void bridge.writeFrame(sessionId, frame, html).then((result) => {
-            if (result.ok) setBanner(null);
-            if (!result.ok) {
-              report(t('writeFailed') + result.error.message + ' ' + t('rolledBack'), 'error');
-              void load(false);
-            }
+          if (!frame || !info) {
+            setLastRef(null);
+            return;
+          }
+          const reference = buildElementReference(frame, info);
+          setRefCopied(false);
+          setLastRef({
+            frameId: frame.id,
+            frameName: frame.name || frame.id,
+            tag: String(info.tag || ''),
+            path: String(info.path || ''),
+            text: refText(info.text),
+            reference: reference,
           });
+          // 帧内脉冲一次：让用户看见"引用的是这个元素"（探针自己衰减，不留痕迹）。
+          const command = commandsRef.current.get(frameId);
+          if (command && info.path) command({ cmd: 'highlight', value: String(info.path) });
+
+          const actions = actionsNow();
+          if (!actions) {
+            report(t('refFailed') + t('refNoSession') + ' ' + t('refFallbackHint'), 'error');
+            setLastRef((previous) => (previous ? Object.assign({}, previous, { fallback: true }) : previous));
+            return;
+          }
+          const result = insertReferenceIntoComposer(actions, reference);
+          if (result.ok) {
+            setBanner(null);
+            report(t('refInsertedHint'));
+            return;
+          }
+          report(t('refFailed') + result.reason + ' ' + t('refFallbackHint'), 'error');
+          setLastRef((previous) => (previous ? Object.assign({}, previous, { fallback: true }) : previous));
         },
-        [bridge, sessionId, report, load, t],
+        [report, t, actionsNow],
       );
 
-      const onSelectElement = React.useCallback((frameId, info) => {
-        setSelected(info ? { frameId: frameId, info: info } : null);
-      }, []);
+      // 测试钩子出口：把"给本会话某帧的探针发指令"交出去（点选构造见下面的 selectElement）。
+      //
+      // 两条路都刻意复用生产代码：`__refSelect` 走的就是 `onSelectElement`（帧内真实点击最终
+      // 也到这里），普通指令走的就是帧指令 ref。这样验收者不必去点沙箱帧，而验的又不是另一套
+      // 逻辑。普通指令需要该帧的探针已登记（帧真的渲染出来了），帧没起来时返回 false。
+      //
+      // 注册**只做一次**：回调体和 onSelectElement 都走 ref。原因是踩过的坑——把
+      // `onSelectElement` 写进依赖数组会让 effect 反复 cleanup+register，而 `React.useCallback`
+      // 的恒定性不是契约；一旦它换了身份，注册就会在"删掉又登记"之间闪，钩子时灵时不灵
+      // （实测：同样的调用，有时派发到回调、有时静默落空）。
+      const selectRef = React.useRef(null);
+      selectRef.current = onSelectElement;
+      React.useEffect(() => {
+        if (!onPreviewReady || !sessionId) return undefined;
+        return onPreviewReady(sessionId, (frameId, payload) => {
+          if (payload && payload.__refSelect) {
+            const fn = selectRef.current;
+            if (!fn) return false;
+            fn(frameId, payload.info || null);
+            return true;
+          }
+          const handler = commandsRef.current.get(frameId);
+          if (!handler) return false;
+          handler(payload);
+          return true;
+        });
+      }, [onPreviewReady, sessionId]);
 
-      /** 帧内角标回报；内容没变就保留原 state，避免"回报→重渲染→再回报"的自激。 */
-      const onAnchors = React.useCallback((frameId, anchored, missing) => {
-        setAnchoring((previous) =>
-          previous.anchored.join(',') === anchored.join(',') && previous.missing.join(',') === missing.join(',')
-            ? previous
-            : { anchored: anchored, missing: missing },
-        );
-      }, []);
-
-      const saveComment = React.useCallback(
-        async (target, text) => {
-          if (!currentId || !text) return;
-          // 只存元素选择器，不存坐标：没有画布了，位置由 target 决定。
-          await commit([{ op: 'add_comment', frameId: currentId, text: text, target: target, x: 0, y: 0 }], '批注未保存：');
+      /** 复制当前引用文本（失败时用户唯一需要的那一步）。 */
+      const copyReference = React.useCallback(
+        (text) => {
+          const nav = typeof navigator === 'undefined' ? null : navigator;
+          if (!nav || !nav.clipboard || typeof nav.clipboard.writeText !== 'function') {
+            setRefCopied(false);
+            return;
+          }
+          void nav.clipboard.writeText(text).then(
+            () => setRefCopied(true),
+            () => setRefCopied(false),
+          );
         },
-        [commit, currentId],
-      );
-
-      const resolveComment = React.useCallback((commentId) => void commit([{ op: 'resolve_comment', id: commentId, resolved: true }], '批注未保存：'), [commit]);
-
-      const focusComment = React.useCallback(
-        (comment) => {
-          const command = commandsRef.current.get(currentId);
-          if (command && comment.target) command({ cmd: 'selectPath', value: comment.target });
-        },
-        [currentId],
-      );
-
-      /** 点帧内角标 → 定位到那条批注。定义在 focusComment 之后，避免暂时性死区。 */
-      const onCommentClick = React.useCallback(
-        (id) => {
-          const comment = comments.find((item) => item.id === id);
-          if (comment) focusComment(comment);
-        },
-        [comments, focusComment],
+        [],
       );
 
       // 关于「放大」：不再自己做一个按钮。
@@ -1513,12 +1568,6 @@ window.__ModuleLoader__.load({
             SIZE_PRESETS.map((preset) => h('option', { key: preset.id, value: preset.id }, preset.label)))
           : null,
         h(ToolButton, { onClick: () => { void load(false); setReloadToken((n) => n + 1); }, title: t('reload') }, t('reload')),
-        // 批注入口：锚点失效的批注在预览里没有角标可点，必须另有一个总能打开列表的地方，
-        // 否则"原文已保留"等于看不见——那就成了静默丢弃。
-        comments.length > 0
-          ? h(ToolButton, { active: !!selected, onClick: () => setSelected({ frameId: currentId, info: null }), title: t('comments') },
-              t('comments') + '（' + comments.filter((comment) => !comment.resolved).length + '）')
-          : null,
         currentFrame ? h(ToolButton, { onClick: () => void handoff(), title: t('handoff') }, t('handoff')) : null,
       );
 
@@ -1553,33 +1602,30 @@ window.__ModuleLoader__.load({
                 reloadToken: reloadToken,
                 onReload: () => setReloadToken((n) => n + 1),
                 onSelectElement: onSelectElement,
-                onElementChanged: onElementChanged,
-                onCommentClick: onCommentClick,
-                onAnchors: onAnchors,
                 registerCommand: registerCommand,
                 t: t,
               })
             : null,
-          selected && currentFrame
-            ? h(Inspector, {
-                frame: currentFrame,
-                info: selected.info,
-                comments: comments,
-                anchoring: anchoring,
-                command: (payload) => {
-                  const fn = commandsRef.current.get(currentFrame.id);
-                  if (fn) fn(payload);
+          // 引用状态条：引用成没成、引用了哪个元素，用户在这里能一眼核对。
+          // 它是"引用"这件事在预览侧的可见账本——失败时唯一要做的动作（复制）也在这一行。
+          currentFrame
+            ? h(
+                'div',
+                {
+                  style: { position: 'absolute', left: 8, right: 8, bottom: 8, zIndex: 4, display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 7, border: '1px solid ' + BORDER, background: 'var(--dsw-alias-bg-layer-3, rgba(30,30,36,0.94))', color: 'var(--dsw-alias-label-primary, inherit)', fontSize: 11, lineHeight: 1.5, },
                 },
-                onDeselect: () => {
-                  setSelected(null);
-                  const fn = commandsRef.current.get(currentFrame.id);
-                  if (fn) fn({ cmd: 'clearSelection' });
-                },
-                onSaveComment: (target, text) => void saveComment(target, text),
-                onResolveComment: (id) => void resolveComment(id),
-                onFocusComment: focusComment,
-                t: t,
-              })
+                lastRef
+                  ? h(
+                      'span',
+                      { style: { flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, title: t('refLabel') + '：' + lastRef.reference },
+                      t('refLabel') + '：' + lastRef.frameName + ' · ' + (lastRef.tag || '?') + ' · ' + (lastRef.text || '(无文字)'),
+                    )
+                  : h('span', { style: { flex: 1, minWidth: 0, opacity: 0.7 } }, t('refEmpty')),
+                lastRef
+                  ? h(ToolButton, { onClick: () => copyReference(lastRef.reference), title: lastRef.reference }, refCopied ? t('refCopied') : t('refCopy'))
+                  : null,
+                lastRef ? h(ToolButton, { onClick: () => { setLastRef(null); setRefCopied(false); }, title: t('close') }, '×') : null,
+              )
             : null,
           handoffText
             ? h(
@@ -1616,7 +1662,17 @@ window.__ModuleLoader__.load({
     /** 右侧栏标签页主体：唯一入口，scope 是 session，所以天然跟着当前工作区。 */
     function PreviewTabBody(props) {
       const { ctx, bridge, t, onOpened } = props;
-      return h(Preview, { ctx: ctx, bridge: bridge, sessionId: props.sessionId, t: t, onOpened: onOpened });
+      return h(Preview, {
+        ctx: ctx,
+        bridge: bridge,
+        sessionId: props.sessionId,
+        // 会话作用域插槽的标准 props：插入引用的能力就是它带的（见 ComposerBridge 的说明）。
+        inputActions: props.inputActions,
+        // 测试钩子出口（在 apply 里注册）。漏了转发这一行，previewSessions() 会永远是空的。
+        onPreviewReady: props.onPreviewReady,
+        t: t,
+        onOpened: onOpened,
+      });
     }
 
     /** 标签页标题。 */
@@ -1638,10 +1694,53 @@ window.__ModuleLoader__.load({
        * @param ctx - 客户端根上下文。
        */
       apply(ctx) {
+        /** 预览面板的注册表：会话 → { frameId → 给帧内探针发指令的函数 }。 */
+        const frameCommands = new Map();
+        /** 最近挂载的预览面板所在会话；测试钩子省略 sessionId 时用它。 */
+        let lastPreviewSession = null;
+        const sessionHandler = (sessionId) => (sessionId && frameCommands.get(sessionId)) || (lastPreviewSession && frameCommands.get(lastPreviewSession)) || null;
+        const dispatch = (sessionId, frameId, payload) => {
+          const handler = sessionHandler(sessionId);
+          if (!handler) return false;
+          return handler(frameId, payload);
+        };
+
         window.__dshDesignCanvas = {
           setTransport: setTransport,
           getTransport: function () {
             return transport;
+          },
+          /**
+           * 测试/诊断钩子：给验收者一个"不开沙箱帧也能构造点选事件"的入口。
+           *
+           * 沙箱帧（`sandbox="allow-scripts"`，无 `allow-same-origin`）在自动化里点不稳，
+           * 而真实点击与这条路径在父页面走的是**同一个** `onSelectElement`，所以拿它做验收
+           * 不会绕开被测逻辑。帧内真实点击仍是首选证据（见 docs/verification-*）。
+           *
+           * 两种形态（省略 sessionId 时用最近挂载的预览面板）：
+           *   __dshDesignCanvas.selectElement('order-list', info)
+           *   __dshDesignCanvas.selectElement(sessionId, 'order-list', info)
+           * @returns 真派发到面板返回 true；面板没挂载或帧没注册返回 false。
+           */
+          selectElement: function (sessionId, frameId, info) {
+            // 两种形态共用这一个入口，别改坏：
+            //   selectElement(frameId, info)              → info 落在第 2 个形参
+            //   selectElement(sessionId, frameId, info)   → 三个形参都在位
+            if (info === undefined) return dispatch(null, sessionId, { __refSelect: true, info: frameId || null });
+            return dispatch(typeof sessionId === 'string' ? sessionId : null, frameId, { __refSelect: true, info: info || null });
+          },
+          /** 测试/诊断钩子：直接给帧内探针发一条指令（例如 `{cmd:'highlight', value:选择器}`）。 */
+          command: function (sessionId, frameId, payload) {
+            return dispatch(typeof sessionId === 'string' ? sessionId : null, frameId, payload);
+          },
+          /** 故障注入：清空"输入框动作面"登记，用来复现"引用插不进去"的可见失败分支。 */
+          clearComposerInserters: function () {
+            composerInserters.clear();
+          },
+          composerInserters: composerInserters,
+          /** 哪些会话的预览面板已经挂载（测试钩子就绪的标志）。 */
+          previewSessions: function () {
+            return Array.from(frameCommands.keys());
           },
         };
 
@@ -1654,6 +1753,18 @@ window.__ModuleLoader__.load({
         const bridge = createBridge(ctx);
         const autoOpener = createAutoOpener(ctx, bridge, tracker);
         ctx.effect(() => autoOpener.start(), 'design-preview:auto open');
+
+        // 聊天输入框桥：挂在输入框上方的会话级插槽，只做一件事——把这一会话的
+        // `inputActions` 登记进 composerInserters。渲染 null，不占地方。
+        ctx.slots.inject('conversation.input.dock', () =>
+          ctx.slots.register({ name: 'conversation.input.dock', id: 'design-canvas-composer-bridge' }, (props) =>
+            h(ComposerBridge, {
+              sessionId: props.sessionId,
+              inputActions: props.inputActions,
+              onRegister: (sessionId, actions) => composerInserters.register(sessionId, actions),
+            }),
+          ),
+        );
 
         // 标签类型。`guide` 是唯一入口：右侧栏的「+」与空侧栏都渲染这份清单，
         // 点一个胶囊就 openTab(kind) 打开它。
@@ -1685,6 +1796,15 @@ window.__ModuleLoader__.load({
                 bridge: bridge,
                 t: t,
                 onOpened: (id) => autoOpener.markOpened(id),
+                // 预览面板 → 测试钩子：按会话登记"给帧发指令"的函数。
+                onPreviewReady: (sessionId, command) => {
+                  frameCommands.set(sessionId, command);
+                  lastPreviewSession = sessionId;
+                  return () => {
+                    if (frameCommands.get(sessionId) === command) frameCommands.delete(sessionId);
+                    if (lastPreviewSession === sessionId) lastPreviewSession = null;
+                  };
+                },
               }),
             ),
           ),

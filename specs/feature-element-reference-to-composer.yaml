@@ -1,0 +1,196 @@
+spec:
+  type: "feature"
+  name: "点选设计元素 → 直接引用进对话（去掉元素属性弹层与批注）"
+  id: "feature-element-reference-to-composer"
+  version: 5
+  updated: "2026-10-09"
+  status: verified
+  blocked_reason: ""
+  status_log:
+    - date: "2026-10-09"
+      from: "draft"
+      to: "ready"
+      by: "lead"
+      version: 1
+      note: "用户原话「点击设计元素的时候，不要弹出这个（元素属性面板），应该直接在 dsh 的会话聊天中引用这个点击的元素才对，然后用户自然就会输入要怎么调整，这样的话标注就不需要了，因为用户会直接引用元素直接和 dsh 聊天框聊天」→ 判定为 feature（改变既有交互行为）。契约按用户原话写死：点选即引用、不弹层、批注 UI 退场。"
+    - date: "2026-10-09"
+      from: "ready"
+      to: "in_progress"
+      by: "lead"
+      version: 2
+      note: "实现完成（client.js sha256[:16]=7fb7b8ebadc473b0，1821 行）并进入独立复验。期间自查+复验共修 5 个真缺陷：D1 面板挂载即崩（TDZ）、D2 测试钩子未转发 onPreviewReady、D3 钩子参数错位会假绿、D4 插入后光标塌到文档开头、D5 我修 D4 时引入的回归（InputActions 没有 state，导致分隔符丢失、两条引用粘连）。AC3 判据按用户诉求修正：原「activeElement 仍是预览侧元素」改为「不滚动/不丢草稿/光标落在末尾/一次撤销可恢复」——实现为了让用户接着打字会把选区收拢到草稿末尾，输入框因此成为 activeElement，这正是用户要的。"
+    - date: "2026-10-09"
+      from: ready
+      to: in_progress
+      by: lead
+      version: 3
+      note: "实现完成，进入独立复验（D1~D5 已修）。"
+    - date: "2026-10-09"
+      from: in_progress
+      to: done
+      by: lead
+      version: 4
+      note: "实现完成并独立复验：7 PASS / 1 无法确认（AC5 失败分支不可达，已在 unverified 登记）。AC3 曾按 v1 判据（activeElement）判 FAIL，经 Lead 裁定改判据不改实现后复判 PASS。"
+    - date: "2026-10-09"
+      from: done
+      to: verified
+      by: lead
+      version: 5
+      note: "独立复验（T3）判定 7 PASS / 1 无法确认；AC3 曾按 v1 判据（activeElement）判 FAIL，经 Lead 裁定改判据不改实现后按 v2 原文复判 PASS。Lead 复核了 T3 的原始证据与可复跑脚本，并实跑 node --check / node --test 复核。"
+  related: []
+  goal: "在右侧栏设计预览里点一个元素时，不再弹出元素属性面板，而是把这个元素的定位信息直接写进聊天输入框；用户接着打字说明要改什么即可，元素批注交互从界面退场。"
+  context: |
+    现状（client.js）：iframe 探针 postMessage {type:'select', info} → Preview.onSelectElement → setSelected({frameId, info}) → 渲染 Inspector 抽屉（文字/颜色/字号/内外边距 + 就这个元素写批注 + 批注列表），并 bridge.writeFrame 把改动写回 .design/frames/<id>.html。
+
+    用户看过真实界面后否决了这个弹层：它把「改设计」变成一个自带 6 个输入框的小表单，而用户真正想说的是自然语言（「这个按钮太土了」）。真正缺的能力是把「我在说哪个元素」这件事无损地告诉 agent，而聊天输入框是 DSH 里已有的、用户天天在用的输入面。
+
+    技术路径（已在 DSH 源码里核对，非猜测）：
+    - @deepseek-ai/dsh-client-ui-conversation 通过 ctx.uiSession.provide({ props: ['inputActions'] }) 把 InputActions（实际只有 captureInsertion / insertText / setDraft / persistDraft / addAttachments / removeAttachment / pruneAttachments / submit 八个方法，**没有 state**）发给每个 session 作用域的插槽组件。
+    - 本插件的预览面板挂在 sidebar.right.pane.tab（keyed，session 级），因此组件 props 上就有 inputActions。
+    - insertText 落到 shell 自有的 Lexical 编辑器上（insertAsyncText），不依赖输入框有焦点，实现一次撤销、不会覆盖用户后续编辑（span 带 draftRev 校验）；失焦时 captureInsertion() 返回的 {start:0,end:0} 是「没有选区」的默认值而不是「文档为空」，草稿空不空只能从输入框 DOM 判（composerDraftEmpty）；setDraft 会把光标留在文档开头，因此不用它。
+    - 该包文档把这条路径定义为「异步文本结果插入」的正式语义，本插件是它的第一个真实调用方。
+
+    交互上的取舍：不主动聚焦（不调 focus()）、不滚动、不跳视口；但为了让「引用完接着打字」落在草稿末尾，会把编辑器选区收拢到文档末尾（collapseComposerCaretToEnd，纯 DOM Range）。代价是输入框会成为 activeElement——这是为达成用户诉求（引用完直接说话）付的、且可接受的一步。
+  assumptions:
+    - 用户说的「引用」= 把元素的定位信息放进聊天输入框（纯文本），不要求做成 @ 引用胶囊（胶囊是 file-reference 插件的能力，@ 在本产品里被文件引用占用；插入文件路径会误导 agent 去读文件）。
+    - .design/design.json 里已有的批注数据保持可读、不删除（design_status 仍返回 comments[]），只是画布不再有写批注的界面。
+  blocking_questions: []
+  open_questions: []
+
+  inputs:
+    - name: "帧内点选事件"
+      description: "沙箱 iframe 探针 postMessage {__dshDesign:1, type:'select', info:{path, tag, text, color, background, fontSize, padding, margin}}；path 是 html > body … 的 nth-of-type 选择器"
+      source: "iframe postMessage（同源校验 event.source === iframe.contentWindow）"
+      required: "true"
+    - name: "当前屏信息"
+      description: "frame.id / frame.name（来自 .design/design.json 的 frames[]），用于在引用文本里指明是哪一屏的哪个元素"
+      source: "客户端已加载的 .design 工程"
+      required: "true"
+    - name: "聊天输入框动作面"
+      description: "会话作用域插槽的标准 props inputActions（captureInsertion(): TokenSpan、insertText(text, span): boolean），由 @deepseek-ai/dsh-client-ui-conversation 经 ctx.uiSession.provide 注入"
+      source: "DSH 客户端服务（session 作用域插槽标准 props）"
+      required: "true"
+
+  outputs:
+    format: "修改后的 client.js（无构建、自包含客户端半）+ 聊天输入框里出现的一段纯文本引用"
+    schema: |
+      引用文本（每行一条，行间换行，整段追加到草稿末尾）：
+        【设计元素】<frame.name>（frame: <frame.id>）
+        元素：<info.tag>
+        选择器：<info.path>
+        当前文字：<info.text 归一化空白并截断 40 字>
+        文件：.design/frames/<frame.id>.html
+      上述五行以外的字段一律不写（不写颜色/字号/内外边距——用户要点评的是元素，不是属性表）。
+    path: "client.js（预览面板的 onSelectElement 与聊天输入框桥接）"
+
+  constraints:
+    - 只改客户端 client.js；host 半（index.js、src/host/**）不动，design_canvas_apply 的 op 词表不动（add_comment 等保留，供工具与历史数据继续可用）。
+    - 插入文本必须走 inputActions.insertText（带 draftRev 的 span 校验）；禁止用 document.execCommand、直接改 contenteditable、伪造键盘事件等 DOM 注入手段。
+    - 不主动聚焦、不滚动：插入路径不调用 inputActions.focus()，不把聊天列滚到底；为了让用户「引用完接着打字」落在末尾，允许把编辑器选区收拢到文档末尾（这会顺带让输入框成为 activeElement），但不允许因此产生滚动、视口跳动或草稿损失。
+    - 不允许静默失败：插不进去要看得见原因（失败提示必须出现在预览面板内）。
+    - 沙箱红线不变：iframe 仍是 sandbox="allow-scripts"，不得加 allow-same-origin。
+    - 引用文本里出现的元素文字要归一化空白、截断 40 字，保证「引用 + 一句话」不把输入框撑成一段长文。
+    - 不引入新依赖、不引入构建步骤；client.js 仍是单文件 __ModuleLoader__.load 形态。
+
+  out_of_scope:
+    - 不做 @ 引用胶囊（file-reference 的领地），不改 design_status 的返回结构。
+    - 不做「点元素即自动提交/自动发送」。
+    - 不删除 .design/design.json 里的历史批注数据，也不改 host 的 comments 读写实现。
+    - 不做回滚/撤销栈（引用只是一段可删的文本，用户自己就能删）。
+    - 不动落地到项目（handoff）路径。
+
+  tools:
+    - node --check client.js（语法门）
+    - node --test src/host/*.test.js（host 回归，确认没被牵连）
+    - playwright（真实 GUI http://127.0.0.1:3080，验证点选 → 输入框真的出现引用）
+
+  steps:
+    - 在 client.js 里加一个「会话 → 输入框动作面」的桥：注册一个隐藏的 conversation.input.dock 占位，取得该会话的 inputActions，按 sessionId 存进注入表；预览面板拿不到时给出可见提示而不是静默失败。
+    - 删掉 Inspector 组件与它的选中态渲染；工具栏不再有「批注（N）」入口；选中元素不再需要 selected state。
+    - 重写 onSelectElement：拼引用文本 → captureInsertion() → insertText()；失败（rev 过期或被锁）重试一次，再失败就提示并把引用文本放进可复制的降级卡片。
+    - 底部加一条「最近引用」状态条（含复制按钮），让引用这件事在预览里可见、可核对。
+    - 清理只在属性面板里用到的文案与工具函数（props/field*/comment* 文案、rgbToHex），把 pickHint 改成新交互的自解释文案。
+    - 给 window.__dshDesignCanvas 补一个测试钩子，让验收者能在不开沙箱帧的情况下构造「点选事件」（沙箱帧内点击自动化不稳）。
+    - 更新 README.md / docs/architecture.md，把「就地改元素 + 元素锚点批注」改成「点元素引用到对话」，并记录为什么砍。
+
+  acceptance_criteria:
+    - "AC1 点选即引用：在预览 iframe 里点击任一元素（沙箱 allow-scripts、无 allow-same-origin），500ms 内聊天输入框的草稿末尾出现以「【设计元素】」开头的引用文本，且不再出现任何元素属性面板（页面上查不到「元素属性」文案与属性输入框）。"
+    - "AC2 引用内容完整且克制：引用文本包含 frame 名称、frame id、元素标签名、info.path 选择器、当前文字（≤40 字）与 .design/frames/<id>.html；不含颜色/字号/内外边距字段。元素文字超过 40 字时被截断。"
+    - "AC3 不打断、可接着写：插入后聊天列 scrollTop 与插入前一致（差值 0）、视口不跳；用户既有草稿内容一字不丢；插入后光标落在草稿末尾（用户紧接着打字落在末尾，而不是跑到整段草稿最前面）；一次撤销即可恢复到插入前的草稿。（本版修正：原 AC 写的是「document.activeElement 仍是预览侧元素」，实测为达到「接着打字」必须把选区收拢到末尾、因而输入框会成为 activeElement——这是用户要的行为，故改判据，不再把 activeElement 当验收项。）"
+    - "AC4 可连续引用：对同一屏的第二个元素再点一次，输入框里同时存在两条引用（第一条完整保留），两段之间可读。"
+    - "AC5 失败可见：构造「输入框动作面暂时不可用」（把注入表临时清空）后点元素，预览面板内出现可见的失败提示与可复制引用文本，不产生任何静默无响应。"
+    - "AC6 边界不炸：对空帧（0 字节）、超限帧、被切走的帧发点选事件，客户端不抛未捕获异常且不写入坏数据；info.text 为空串、info.path 为空串时仍能生成合法引用文本。"
+    - "AC7 批注 UI 退场且数据不丢：工具栏不再有「批注（N）」入口、点元素不再出现「就这个元素写批注」；同时 .design/design.json 里既有的 comments[] 不被删除，design_status 仍能返回它们，host 的 add_comment / resolve_comment 仍可用。"
+    - "AC8 无回归：node --check client.js 通过；node --test src/host/*.test.js 全绿；design_frame_write、落地到项目、探针 setText 通道等既有能力不被破坏（手工回归点到）。"
+
+  verification:
+    result: "8 条 AC：7 条运行级 PASS（AC1/2/3/4/6/7/8）+ AC5 如实标注无法确认；client.js sha256[:16]=7fb7b8ebadc473b0（1821 行）全流程未变，host 测试 50/50，.design 工程零写入。"
+    verified_by: independent
+    verifier: "teammate-verifier（T3，全程未参与实现）"
+    verified_at: "2026-10-09"
+    acceptance:
+      - criterion: "AC1 点选即引用"
+        status: pass
+        evidence: "真空草稿点选 → [data-composer-input] 出现五行引用，13/14/17ms（预算 500ms）；body 与面板均无「元素属性」「就这个元素写批注」；右栏表单控件计数 2→2 且都是 select"
+      - criterion: "AC2 引用内容完整且克制"
+        status: pass
+        evidence: "五行逐字匹配；长文本截断为 41 字（40+…）；无文字元素 → (这个元素没有文字)；全文不含颜色/字号/内外边距"
+      - criterion: "AC3 不打断、可接着写（v2 判据）"
+        status: pass
+        evidence: "独立复验 5 项子判据全过：① 聊天列 scrollTop 差值 0（本会话 scrollHeight===clientHeight===680，该条空转，不作强证据）；② 视口不跳——window.scrollY 与 document.documentElement.scrollTop 全程 0、右栏几何不变 [704,0,576,720]，对照实验证明手工打 5 行与插入一条引用都不推动预览 iframe（y 三种状态都是 170）；③ 真实中文草稿「把导出按钮改成描边样式」一字不丢且仍是前缀，连点两次后仍在最前；④ 插入后敲 ZZ → …order-list.htmlZZ（落末尾）；⑤ 一次 Ctrl+Z 整条引用消失、草稿回原文（证明确为 Lexical 真实编辑）。已知副作用（不列为验收项）：activeElement 由 body → 输入框，0/50/150/400/900ms 采样一致"
+      - criterion: "AC4 可连续引用"
+        status: pass
+        evidence: "空草稿两条：…order-list.html\\n【设计元素】…；有草稿两条：草稿在前、两条引用依次在后、都有换行、无粘连"
+      - criterion: "AC5 失败可见"
+        status: not_run
+        evidence: "两条路（props / 桥）都通时失败分支不可达；清空桥后 props 路仍插入成功。仅有代码级证据（refFailed 分支 + 面板内 error 横幅 + 状态条保留复制按钮），未取得运行级证据"
+      - criterion: "AC6 边界不炸"
+        status: pass
+        evidence: "选择器指不到 / 已切走的帧 / 空文字元素：不抛异常、不写盘；0 字节帧与超限帧运行级未覆盖（已登记 unverified），沿用上一轮报告 §3.11"
+      - criterion: "AC7 批注 UI 退场且数据不丢"
+        status: pass
+        evidence: "界面零旧文案、无「批注（N）」按钮、无角标；design_status 仍返回 3 条 comments（含带 target 那条）；host 词表未改"
+      - criterion: "AC8 无回归"
+        status: pass
+        evidence: "node --check 退出 0；node --test src/host/*.test.js → tests 50 / suites 16 / pass 50 / fail 0（244.27ms）；切屏、落地、探针 setText 通道可用；.design/frames 三个文件 sha256 与基线逐字节相同"
+    commands:
+      - "node --check client.js -> exit 0"
+      - "node --test src/host/*.test.js -> tests 50 / suites 16 / pass 50 / fail 0（duration 244.27359ms）"
+    artifacts:
+      - "docs/verification-element-reference-to-composer.md（§一 结论摘要 / §五 独立复验 §5.1~§5.8）"
+      - ".playwright-mcp/ac-evidence/v6-element-ref/raw-results.json"
+      - ".playwright-mcp/ac-evidence/v6-element-ref/rerun-A.js ~ rerun-E.js（可复跑脚本）"
+      - ".playwright-mcp/ac-evidence/v6-element-ref/defect-1-slot-crash.png（D1 崩溃现场）"
+    unverified:
+      - "AC5 失败可见（criterion 原文）：A/B 两条路都通时失败分支不可达，构造它需要往生产代码加测试桩（明确不加），只有代码级证据"
+      - "0 字节帧 / 超限帧的运行级边界：当前工程没有这两种帧，造帧会污染用户工作区，只做静态核对并沿用上一轮 §3.11 的结论"
+      - "可信鼠标点击：38% 缩放的帧上 locator.click 报 Element is outside of the viewport，改用帧内 element.click()（探针 capture 相位、不检查 isTrusted）与探针 selectPath 通道"
+      - "AC3 的 scrollTop 判据空转：本会话 scrollHeight === clientHeight，差值 0 不构成证据；已改用 window.scrollY + iframe 几何 + 手工打 5 行的对照实验"
+
+  follow_ups:
+    - "F1（低）：client.js 里 insertReferenceIntoComposer 的注释仍写「insertText 会把插入点留在写入内容之后」，与事实相反（正因此才需要 collapseComposerCaretToEnd）。行为正确、注释错误；为不动冻结 sha 未改，下次改动时一并修"
+    - "F2（中）：批注在画布上既不能写、画布也不再展示，但 design_status 仍会返回存量 comments；若将来恢复任何批注视图，需要先决定是否把 add_comment 重新接回 UI"
+    - "F3（低）：AC5 的失败分支缺一个不改生产的构造手段；若要让它可验，需要给调试钩子加一个「让 insertText 返回 false」的开关（属于测试面改动）"
+
+  failure_handling:
+    - scenario: "inputActions 尚未就绪（聊天列未挂载、会话不可写、plan/goal 等冻结态）"
+      handling: "insertText 返回 false 或不可用 → 重试一次（重新 captureInsertion）→ 仍失败则在预览面板内报可见错误，并把引用文本放进可复制卡片（复用已有降级卡片形态），不静默。"
+    - scenario: "用户正在输入过程中（draftRev 在 capture 与 insert 之间变化）"
+      handling: "span 的 draftRev 校验会拒绝这次插入；重试一次即可拿到新 rev。两次都失败才走可见失败分支。"
+    - scenario: "元素文字含大量空白/换行/超长"
+      handling: "空白归一化为单空格、截断 40 字后再拼进引用，保证引用永远定长、可读。"
+    - scenario: "iframe 未渲染/已被切走/帧内无 body"
+      handling: "点选事件根本不会到达（消息源校验），或 info 为空 → 不插入、不报错，只更新状态条为「未选中」。"
+
+  examples:
+    - input: |
+        用户在设计预览里点了「订阅订单列表 · SaaS 后台」这一屏的「导出 CSV」按钮。
+        探针回报 info = { tag: 'button', path: 'body > div:nth-of-type(1) > main > div:nth-of-type(1) > button:nth-of-type(1)', text: '导出 CSV' }
+      output: |
+        聊天输入框草稿变成（原有草稿保留在后）：
+        【设计元素】订阅订单列表 · SaaS 后台（frame: order-list）
+        元素：button
+        选择器：body > div:nth-of-type(1) > main > div:nth-of-type(1) > button:nth-of-type(1)
+        当前文字：导出 CSV
+        文件：.design/frames/order-list.html
+        随后用户接着打字：「太土了，换成主色描边按钮」

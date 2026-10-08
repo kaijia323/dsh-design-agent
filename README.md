@@ -1,6 +1,6 @@
 # dsh-design-canvas
 
-> 在 DSH 里聊天时，右侧栏开一个设计预览：agent 把界面画成真实 HTML，你边聊边看、点元素就地改、点元素写批注，满意了让它落成前端代码。
+> 在 DSH 里聊天时，右侧栏开一个设计预览：agent 把界面画成真实 HTML，你边聊边看，点一个元素就把它的位置信息直接引用进聊天输入框，接着打一句话说要改什么，满意了再让它落成前端代码。
 
 ## 为什么要做这个
 
@@ -11,7 +11,7 @@
 - 没有自检，它画完就交；
 - 没有便宜的迭代手段——"再往左一点、间距大一点"要用文字来回聊二十轮。
 
-所以这个插件的做法是：**把"先设计 UI、再写前端"这条流程搬回 AI 研发链路里**。用户跟 DSH 说话，agent 出设计稿；用户可以直接点着元素改、可以留批注，也可以继续聊天改；设计定稿后再落成项目代码。
+所以这个插件的做法是：**把"先设计 UI、再写前端"这条流程搬回 AI 研发链路里**。用户跟 DSH 说话，agent 出设计稿；看稿时点中哪个元素，那个元素的定位信息就自动进聊天输入框，用户补一句"太土了，换成主色描边按钮"，agent 就照着改；设计定稿后再落成项目代码。
 
 Anthropic 的 [Claude Design](https://support.claude.com/en/articles/14604416-get-started-with-claude-design) 已经验证了这个形态（对话 + 设计画布 + 设计系统 + handoff 给编码 agent）。本项目的差异点是：**它是 DSH 的原生插件，不是另一个 app**——不用切窗口，设计、对话、代码在同一个上下文里；而且带着一套**中文优先的设计契约层**（预设 token + 反 AI 味清单 + 出稿自检）。
 
@@ -23,17 +23,22 @@ Anthropic 的 [Claude Design](https://support.claude.com/en/articles/14604416-ge
 
 > 早期版本做过"真无限画布"（平移缩放、多屏并排、拖动改位置），实测后**已砍掉**：用户看完的判断是"整个画布都多余，我只要聊天 + 一个预览框"。原因与取舍记录在 [docs/architecture.md](docs/architecture.md)。
 
+> 之后又砍掉了点元素弹出来的「元素属性」面板和画布上的批注入口。用户原话：
+> 「点击设计元素的时候，不要弹出这个（元素属性面板），应该直接在 dsh 的会话聊天中引用这个点击的元素才对，然后用户自然就会输入要怎么调整，这样的话标注就不需要了，因为用户会直接引用元素直接和 dsh 聊天框聊天」
+> 留下的是聊天这条路：**点元素 = 把元素信息放进输入框，改法用自然语言说**。原因与取舍同样记录在 [docs/architecture.md](docs/architecture.md)。
+
 ## 现在能做什么
 
 - **对话生成**：说一句"设计一个 SaaS 后台的订单列表页"，agent 出 1~3 屏真实页面。
 - **右侧栏预览**：设计稿作为右侧栏的一个标签，**跟着当前工作区走**（切换工作区，内容随之切换），边聊边看不用切窗口；需要更大视野就用右侧栏自带的 **Fullscreen** 控件（实测 553px → 1257px，缩放随之变大）。
 - **切屏**：多屏时用顶部控件切换，刷新浏览器后仍停在你刚才那一屏。
-- **就地改元素**：在预览里点选元素，直接改文字/颜色/字号/内外边距，写回 HTML 文件。
-- **元素锚点批注**：点着某个按钮写"这个太土了"，agent 通过 `design_status` 读到原文与所属屏；锚点失效时不丢批注，会标成"未锚定"。
-- **实时同步**：agent 改文件后预览自动刷新，且不打断你的滚动位置与选中态。
+- **点元素引用进对话**：在预览里点一个元素，它的定位信息（哪一屏、什么标签、CSS 选择器、当前文字、在哪个文件）自动追加到聊天输入框草稿的末尾（草稿非空时前面补一个换行），你接着说一句要怎么改、再发送就行。插入不会动聊天列的滚动位置，已经打好的草稿一字不丢；光标落在草稿末尾，接着打字就是往引用后面写。
+- **引用看得见、失败不静默**：预览底部有一条「最近引用」状态条，显示刚引用了哪个屏的哪个元素，可一键复制；输入框暂时插不进去（会话没打开、输入框正在提交）时，面板里会给出可见的原因，并把那段引用文本摆出来让你自己复制。
+- **帧内点选反馈**：点中元素时，被点的那个元素会在帧里脉冲高亮一下，让你确认引用的就是它（纯视觉，不写文件）。
+- **实时同步**：agent 改文件后预览自动刷新，不会把你切到别的屏上去。
 - **落地到项目**：把当前屏交给 agent，按项目技术栈生成组件写进 `src/`。
 
-**不做**：无限画布与空间编排、图层面板、矢量钢笔、布尔运算、自动布局算法、多人实时协同、组件变体、Figma 导入、反向同步。
+**不做**：无限画布与空间编排、图层面板、矢量钢笔、布尔运算、自动布局算法、多人实时协同、组件变体、Figma 导入、反向同步；**元素属性面板与画布内的批注编辑器也不再做了**——点选只把元素引用进对话（批注的数据结构、工具与已有数据保留，只是不再有写批注的界面）。
 
 ## 安装
 
@@ -64,7 +69,7 @@ plugin_manager  action: install_bundle  target: <本仓库绝对路径>
 | [src/host/](src/host/) | 设计工程读写、agent 工具、HTTP 写通道 |
 | [design-system/](design-system/) | 3 套中文设计预设 + 3 个起步模板 + 自检脚本 |
 | [prompts/](prompts/) | 注入 systemPrompt 的设计约定与落地流程 |
-| [specs/](specs/) | 执行契约（12 条验收标准）与查看器 |
+| [specs/](specs/) | 执行契约（画布 12 条 + 元素引用 8 条）与查看器 |
 | [docs/architecture.md](docs/architecture.md) | 架构、扩展点、安全模型、安装与生效方式 |
 | [docs/evidence/](docs/evidence/) | 验收证据截图 |
 
@@ -78,9 +83,10 @@ node scripts/post-restart-check.mjs               # 重启后：路由/工具/�
 
 ## 状态
 
-形态已定稿为「聊天 + 右侧栏预览面板」（SPEC v6）。逐条验收结果见
-[docs/verification-feature-dsh-design-canvas.md](docs/verification-feature-dsh-design-canvas.md)，
-执行契约见 [specs/feature-dsh-design-canvas.yaml](specs/feature-dsh-design-canvas.yaml)。
+形态已定稿为「聊天 + 右侧栏预览面板」（画布形态 SPEC v6）；元素交互在 v7 改成「点元素引用进对话」，属性面板与批注入口退场。
+
+- 画布形态：[执行契约 specs/feature-dsh-design-canvas.yaml](specs/feature-dsh-design-canvas.yaml) · [验收报告 docs/verification-feature-dsh-design-canvas.md](docs/verification-feature-dsh-design-canvas.md)
+- 元素引用：[执行契约 specs/feature-element-reference-to-composer.yaml](specs/feature-element-reference-to-composer.yaml) · [验收报告 docs/verification-element-reference-to-composer.md](docs/verification-element-reference-to-composer.md)
 
 ## 致谢与来源
 

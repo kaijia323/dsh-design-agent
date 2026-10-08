@@ -1,5 +1,7 @@
 # 设计预览面板（v5）交付说明
 
+> **2026-10-09 注记（T2 补）**：本文描述的是 **v5 / v6 形态**。v7 起，「元素属性」面板与画布内的批注编辑已经退场，点元素改为把元素定位信息引用进聊天输入框——本文里凡涉及这两项交互的内容都已不是当前产品行为，请以 [README.md](../README.md) 与 [docs/architecture.md](architecture.md) 的 v7 记录为准。历史验收报告 [docs/verification-feature-dsh-design-canvas.md](verification-feature-dsh-design-canvas.md) 原样保留，不改。
+
 > 归属：T3（teammate-canvas）独占维护。
 > 对应产物：`client.js`（sha256[:16] = `64992303f5a91c50`，1701 行，冻结版本）。
 > 冻结后任何改动都要重新复核本文件第 4 节的验证方式。
