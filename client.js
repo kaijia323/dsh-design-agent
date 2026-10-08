@@ -1341,18 +1341,26 @@ window.__ModuleLoader__.load({
       const handoff = React.useCallback(async () => {
         const frame = currentFrame;
         if (!frame || !sessionId) return;
-        // 主方案：T4 定义的 session command。host 尚未注册时 execute 会返回 value===undefined。
-        const commands = ctx.remote && ctx.remote.commands;
-        if (commands && typeof commands.execute === 'function') {
-          try {
+        // 主方案：T4 定义的 session command。
+        //
+        // 注意（踩过的坑）：Cordis 的 context 代理在读取**未注入**的服务属性时是**直接抛异常**，
+        // 不是返回 undefined。所以 `ctx.remote && ctx.remote.commands` 这种"看起来防御"的写法
+        // 本身就会抛，而 try 只包住后面的 execute 是拦不住的 —— 降级分支会永远到不了。
+        // 属性访问必须和 execute 一起包在 try 里。
+        //
+        // `remote.commands` 故意**不**写进 inject：host 侧没有注册 /design-handoff，
+        // 声明它收益为零，却会让缺少该服务的 profile 里整个客户端半不激活。
+        try {
+          const commands = ctx.remote.commands;
+          if (commands && typeof commands.execute === 'function') {
             const result = await commands.execute(sessionId, '/design-handoff ' + frame.id, []);
             if (result && result.ok && result.value !== undefined) {
               setNotice({ text: t('handoffSent') });
               return;
             }
-          } catch (error) {
-            /* 落到降级方案 */
           }
+        } catch (error) {
+          /* 命令通道不可用 → 落到降级方案 */
         }
         // 降级方案（T4 §2）：可复制的指令卡片。属降级，已上报 Lead 记 follow_ups。
         setCopied(false);
