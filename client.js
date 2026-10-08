@@ -61,7 +61,8 @@ window.__ModuleLoader__.load({
       reloadFrame: '重新加载这一屏', fitWidth: '适应宽度',
       refLabel: '最近引用', refCopy: '复制引用', refCopied: '已复制引用',
       refEmpty: '点一个元素，它的位置信息就会自动引用进对话输入框（还没引用过）。',
-      refInsertedHint: '已插入对话输入框，接着打一句要改什么就行（发送前还能改）。',
+      refInsertedHint: '已作为引用胶囊插入对话输入框，接着打一句要改什么就行（发送前还能改）。',
+      refDegraded: '引用胶囊不可用，已降级为纯文本引用：',
       refFailed: '引用没能插进对话输入框：',
       refFallbackHint: '把这行复制到对话输入框即可。', refNoSession: '找不到聊天输入框：会话可能没打开，或输入框当前被禁用。',
       close: '收起', handoffTitle: '落地到项目', handoffHint: '命令通道不可用，已降级为复制指令。把下面这段粘进对话框即可。',
@@ -106,28 +107,173 @@ window.__ModuleLoader__.load({
       return flat.length > limit ? flat.slice(0, limit) + '…' : flat;
     }
 
+    // ---- 引用胶囊：source 名 / 标签上限 / 自包含 ref 的编解码 ----
+
     /**
-     * 把一个点选到的元素折成"贴进对话输入框的那段话"。
+     * 引用 source 的名字。它同时是三个地方的路由键：
+     * 1) `@` 菜单里的分组名；2) 胶囊节点上的 `source` 字段；3) 发送时按名字找 codec 的键。
+     */
+    const REF_SOURCE = 'design-element';
+    /** ref 里的命名空间前缀，防止别的 source 的 ref 被我们误解析。 */
+    const REF_PREFIX = '@design/';
+    /** 胶囊标签里"元素文字"与"屏名"各自的长度上限（标签会长在输入框里，必须短）。 */
+    const REF_LABEL_TEXT_MAX = 14;
+    const REF_LABEL_FRAME_MAX = 12;
+
+    /** UTF-8 → base64url（不用 btoa 的 latin1 捷径，中文屏名会炸）。 */
+    function b64urlEncode(text) {
+      const bytes = typeof TextEncoder === 'function' ? new TextEncoder().encode(text) : null;
+      if (!bytes) return '';
+      const table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      let out = '';
+      for (let i = 0; i < bytes.length; i += 3) {
+        const b0 = bytes[i];
+        const b1 = i + 1 < bytes.length ? bytes[i + 1] : undefined;
+        const b2 = i + 2 < bytes.length ? bytes[i + 2] : undefined;
+        out += table[b0 >> 2];
+        out += table[((b0 & 3) << 4) | ((b1 === undefined ? 0 : b1) >> 4)];
+        if (b1 === undefined) break;
+        out += table[((b1 & 15) << 2) | ((b2 === undefined ? 0 : b2) >> 6)];
+        if (b2 === undefined) break;
+        out += table[b2 & 63];
+      }
+      return out;
+    }
+
+    /** base64url → UTF-8 文本；解不出来返回 null（不抛）。 */
+    function b64urlDecode(text) {
+      const table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+      const clean = String(text || '').replace(/[^A-Za-z0-9_-]/g, '');
+      const bytes = [];
+      let buffer = 0;
+      let bits = 0;
+      for (let i = 0; i < clean.length; i += 1) {
+        const value = table.indexOf(clean.charAt(i));
+        if (value < 0) continue;
+        buffer = (buffer << 6) | value;
+        bits += 6;
+        if (bits >= 8) {
+          bits -= 8;
+          bytes.push((buffer >> bits) & 0xff);
+        }
+      }
+      try {
+        return new TextDecoder().decode(new Uint8Array(bytes));
+      } catch (error) {
+        return null;
+      }
+    }
+
+    /**
+     * 把一个点选到的元素压成"自包含"的引用数据。
+     *
+     * 为什么必须自包含：胶囊会被写进草稿并**跨刷新持久化**，页面重载后 `codec.serialize`
+     * 只拿得到 `ref` 这一个字符串。任何"ref → 插件内存里的映射表"的写法都会在刷新后失联，
+     * 而序列化失败会**阻塞发送**，等于把用户的输入卡死。所以定位信息全部编进 ref。
+     */
+    function refPayload(frame, info) {
+      const safe = info && typeof info === 'object' ? info : {};
+      return {
+        f: frame && frame.id ? String(frame.id) : '',
+        n: frame && frame.name ? String(frame.name) : frame && frame.id ? String(frame.id) : '未命名屏',
+        h: frame ? framePath(frame) : '',
+        t: String(safe.tag || '').trim(),
+        s: String(safe.path || '').trim(),
+        x: refText(safe.text),
+      };
+    }
+
+    /** 引用数据 → 胶囊的 ref 字符串。 */
+    function encodeRef(payload) {
+      return REF_PREFIX + b64urlEncode(JSON.stringify(payload));
+    }
+
+    /** 胶囊的 ref 字符串 → 引用数据；不是我们的 ref 或解不出来返回 null。 */
+    function decodeRef(ref) {
+      const text = String(ref == null ? '' : ref);
+      if (text.indexOf(REF_PREFIX) !== 0) return null;
+      const json = b64urlDecode(text.slice(REF_PREFIX.length));
+      if (!json) return null;
+      try {
+        const parsed = JSON.parse(json);
+        return parsed && typeof parsed === 'object' ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    /**
+     * 引用数据 → **给 agent 看的那段话**（五行定位信息）。
      *
      * 只写定位必需的五样：哪一屏、什么元素、选择器、当前文字、在哪个文件。
      * 刻意不带颜色/字号/内外边距——用户要点评的是元素本身，把计算样式铺进去只会
-     * 让引用变成一张属性表，还把对话输入框撑长（这正是被砍掉的属性面板的毛病）。
-     * 不写 Markdown 反引号：这里的目标是"人能读、agent 能 grep"，反引号只会添噪。
+     * 让引用变成一张属性表（那正是被砍掉的属性面板的毛病）。
+     * 不写 Markdown 反引号：目标是"人能读、agent 能 grep"，反引号只会添噪。
      */
-    function buildElementReference(frame, info) {
-      const safe = info && typeof info === 'object' ? info : {};
-      const tag = String(safe.tag || '').trim() || '(未知元素)';
-      const path = String(safe.path || '').trim();
-      const text = refText(safe.text);
-      const name = frame && frame.name ? String(frame.name) : frame && frame.id ? String(frame.id) : '未命名屏';
-      const id = frame && frame.id ? String(frame.id) : '';
+    function locatorText(payload) {
+      const p = payload && typeof payload === 'object' ? payload : {};
+      const tag = String(p.t || '').trim() || '(未知元素)';
+      const selector = String(p.s || '').trim() || '(没有拿到选择器)';
+      const text = String(p.x || '').trim() || '(这个元素没有文字)';
+      const name = String(p.n || '').trim() || String(p.f || '').trim() || '未命名屏';
+      const file = String(p.h || '').trim() || (p.f ? DESIGN_DIR + '/frames/' + p.f + '.html' : DESIGN_DIR + '/（未知文件）');
       return [
-        '【设计元素】' + name + (id ? '（frame: ' + id + '）' : ''),
+        '【设计元素】' + name + (p.f ? '（frame: ' + p.f + '）' : ''),
         '元素：' + tag,
-        '选择器：' + (path || '(没有拿到选择器)'),
-        '当前文字：' + (text || '(这个元素没有文字)'),
-        '文件：' + (frame ? framePath(frame) : '.design/（未知文件）'),
+        '选择器：' + selector,
+        '当前文字：' + text,
+        '文件：' + file,
       ].join('\n');
+    }
+
+    /** 引用数据 → 胶囊标签：`元素文字 · 屏名`（无文字回落到标签名）。 */
+    function chipLabel(payload) {
+      const p = payload && typeof payload === 'object' ? payload : {};
+      const head = refText(p.x, REF_LABEL_TEXT_MAX) || refText(p.t, REF_LABEL_TEXT_MAX) || '元素';
+      // 屏名常写成「订阅订单列表 · SaaS 后台」这种带子标题的形式；胶囊里只取主标题那一段，
+      // 否则截断会切在「· Saa…」这种半截词上，比不截还难读。
+      const rawName = String(p.n || '').trim();
+      const mainName = rawName.split(' · ')[0] || rawName;
+      const frame = refText(mainName, REF_LABEL_FRAME_MAX) || String(p.f || '').trim() || '未命名屏';
+      return head + ' · ' + frame;
+    }
+
+    /**
+     * 引用胶囊是否可用：只有 @ source 注册成功才为 true。
+     *
+     * 为什么必须守这一条：胶囊的模型文本由 source 的 codec 产出，`serializeReference` 找不到
+     * owner 时会**拒绝**，也就是用户按发送会被 `no serializer` 拦下。所以注册失败时宁可降级成
+     * 纯文本引用，也绝不插一个"发不出去"的胶囊。
+     */
+    let chipSourceReady = false;
+
+    /** 最近一次引用的调试快照（`{payload, ref, label}`），供验收钩子读取。 */
+    let lastRefDebug = null;
+
+    /**
+     * 读一个可选的客户端服务，读不到返回 null。
+     *
+     * 必须裹 try/catch：Cordis 的 context 代理在读**未注入**的服务属性时是直接抛异常，
+     * 不是返回 undefined（这个坑在 remote.commands 上踩过一次）。`inputTriggers` 刻意
+     * **不写进 inject**：它是胶囊这条增强路径的依赖，不该因为某个 profile 缺它就让整个
+     * 预览面板激活失败。
+     */
+    function optionalService(ctx, key) {
+      // 先走 ctx.get()：Cordis 里没有 inject 声明的服务，属性访问会抛（见上面的说明），
+      // 而 ctx.get() 是按名字取服务的正规入口（同 profile 的 ui-skill 就是这么拿 inputTriggers 的）。
+      try {
+        if (typeof ctx.get === 'function') {
+          const viaGet = ctx.get(key);
+          if (viaGet) return viaGet;
+        }
+      } catch (error) {
+        /* 取不到就走下面的属性访问兜底 */
+      }
+      try {
+        return ctx[key] || null;
+      } catch (error) {
+        return null;
+      }
     }
 
     /**
@@ -201,6 +347,55 @@ window.__ModuleLoader__.load({
       }
       if (typeof window.requestAnimationFrame === 'function') window.requestAnimationFrame(move);
       window.setTimeout(move, 60);
+    }
+
+    /** 取一个会话作用域的 Cordis ctx；取不到返回 null（胶囊路径需要它来派发 scoped 事件）。 */
+    function sessionScopeOf(ctx, sessionId) {
+      if (!ctx || !sessionId) return null;
+      try {
+        const sessions = ctx.sessions;
+        if (!sessions || typeof sessions.scope !== 'function') return null;
+        return sessions.scope(sessionId) || null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    /**
+     * 往输入框里插一个**引用胶囊**（不是文本）。
+     *
+     * 走的是输入框自己那条公开路径：session 作用域的 `slash/input-insert-reference` 事件
+     * （`@mode bail`，由会话输入 shell 的同名监听器执行；返回 true 才代表编辑器真的应用了）。
+     * 我们**不碰 contenteditable**、不自己造节点——胶囊的渲染、撤销、持久化、发送时序列化
+     * 全部由那条管线负责。
+     */
+    function insertReferenceChip(ctx, sessionId, reference, span, actions) {
+      const actx = sessionScopeOf(ctx, sessionId);
+      if (!actx || typeof actx.bail !== 'function') return { ok: false, reason: '取不到会话作用域（会话可能未激活）' };
+      // 先开一条独立的历史边界（踩过的坑 D7）：胶囊插入走的 `insertReference` 没带 history tag，
+      // 会和"用户刚敲的那段字"并进同一条 Lexical 撤销记录——实测「打字 → 点元素 → Ctrl+Z」会把
+      // 刚打的字一起吃掉、且找不回来。`insertText` 走的是**带 tag** 的编辑路径，所以在同一个位置
+      // 先做一次零长度写入，就能把随后的胶囊放进它自己的那一步：一次撤销只去掉胶囊，草稿原样保留。
+      let target = span;
+      if (actions && typeof actions.insertText === 'function') {
+        try {
+          actions.insertText('', span);
+          const fresh = typeof actions.captureInsertion === 'function' ? actions.captureInsertion() : null;
+          if (fresh) target = fresh;
+        } catch (error) {
+          /* 边界没开成不影响主流程：胶囊仍可插入，只是撤销会并进上一步 */
+        }
+      }
+      try {
+        const applied = actx.bail(actx, 'slash/input-insert-reference', { reference: reference, span: target });
+        if (applied === true) {
+          collapseComposerCaretToEnd();
+          return { ok: true };
+        }
+        return { ok: false, reason: '输入框未接受胶囊（编辑器可能被锁定）' };
+      } catch (error) {
+        return { ok: false, reason: msgOf(error) };
+      }
     }
 
     /**
@@ -1393,6 +1588,19 @@ window.__ModuleLoader__.load({
        *
        * 失败一律可见：插不进去就把引用文本摆出来让用户复制，绝不静默。
        */
+      /**
+       * 点选元素 = 在输入框里放一个**引用胶囊**。整套交互的核心就这一段。
+       *
+       * 用户对形态的要求是明确的（原话）：「点击元素的时候，不要在 DSH 的聊天框输入文字，
+       * 而是应该像那个艾特符号或者调用指令的那种一样」——所以这里插的是胶囊节点，不是文本；
+       * 五行定位信息改由胶囊的 codec 在**发送时**展开给 agent（见 apply 里的 source 注册）。
+       *
+       * 三级路径，每一级都可见：
+       * 1) 胶囊（首选）：`slash/input-insert-reference` 由输入框自己应用；
+       * 2) 纯文本（降级）：胶囊不可用（source 没注册上 / 取不到会话作用域 / 编辑器拒绝）时，
+       *    用同一套定位信息走文本插入，并**明说已降级**——绝不硬塞一个发不出去的胶囊；
+       * 3) 可见失败：两条都不通就报原因 + 把定位文本摆出来让用户复制。
+       */
       const onSelectElement = React.useCallback(
         (frameId, info) => {
           const frame = projectRef.current && projectRef.current.frames ? projectRef.current.frames.find((item) => item.id === frameId) : null;
@@ -1400,15 +1608,20 @@ window.__ModuleLoader__.load({
             setLastRef(null);
             return;
           }
-          const reference = buildElementReference(frame, info);
+          const payload = refPayload(frame, info);
+          const reference = locatorText(payload);
+          const label = chipLabel(payload);
+          lastRefDebug = { payload: payload, ref: encodeRef(payload), label: label, reference: reference };
           setRefCopied(false);
           setLastRef({
-            frameId: frame.id,
-            frameName: frame.name || frame.id,
-            tag: String(info.tag || ''),
-            path: String(info.path || ''),
-            text: refText(info.text),
+            frameId: payload.f,
+            frameName: payload.n,
+            tag: payload.t,
+            path: payload.s,
+            text: payload.x,
+            label: label,
             reference: reference,
+            form: 'pending',
           });
           // 帧内脉冲一次：让用户看见"引用的是这个元素"（探针自己衰减，不留痕迹）。
           const command = commandsRef.current.get(frameId);
@@ -1417,19 +1630,53 @@ window.__ModuleLoader__.load({
           const actions = actionsNow();
           if (!actions) {
             report(t('refFailed') + t('refNoSession') + ' ' + t('refFallbackHint'), 'error');
-            setLastRef((previous) => (previous ? Object.assign({}, previous, { fallback: true }) : previous));
+            setLastRef((previous) => (previous ? Object.assign({}, previous, { fallback: true, form: 'failed' }) : previous));
             return;
           }
+
+          // 1) 胶囊。
+          let chipReason = null;
+          if (chipSourceReady) {
+            try {
+              const span = actions.captureInsertion();
+              if (span) {
+                const chip = insertReferenceChip(ctx, sessionId, {
+                  source: REF_SOURCE,
+                  ref: encodeRef(payload),
+                  label: label,
+                  clipboardText: '@设计元素:' + label,
+                }, span, actions);
+                if (chip.ok) {
+                  setBanner(null);
+                  report(t('refInsertedHint'));
+                  setLastRef((previous) => (previous ? Object.assign({}, previous, { form: 'chip' }) : previous));
+                  return;
+                }
+                chipReason = chip.reason;
+              } else {
+                chipReason = '拿不到插入位置';
+              }
+            } catch (error) {
+              chipReason = msgOf(error);
+            }
+          } else {
+            chipReason = '引用胶囊不可用（source 未注册）';
+          }
+
+          // 2) 降级：纯文本（编辑器此刻未被修改，重新取 span 也一定有效）。
           const result = insertReferenceIntoComposer(actions, reference);
           if (result.ok) {
             setBanner(null);
-            report(t('refInsertedHint'));
+            report(t('refDegraded') + chipReason);
+            setLastRef((previous) => (previous ? Object.assign({}, previous, { form: 'text' }) : previous));
             return;
           }
+
+          // 3) 两条都不通：可见失败。
           report(t('refFailed') + result.reason + ' ' + t('refFallbackHint'), 'error');
-          setLastRef((previous) => (previous ? Object.assign({}, previous, { fallback: true }) : previous));
+          setLastRef((previous) => (previous ? Object.assign({}, previous, { fallback: true, form: 'failed' }) : previous));
         },
-        [report, t, actionsNow],
+        [report, t, actionsNow, ctx, sessionId],
       );
 
       // 测试钩子出口：把"给本会话某帧的探针发指令"交出去（点选构造见下面的 selectElement）。
@@ -1618,7 +1865,7 @@ window.__ModuleLoader__.load({
                   ? h(
                       'span',
                       { style: { flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }, title: t('refLabel') + '：' + lastRef.reference },
-                      t('refLabel') + '：' + lastRef.frameName + ' · ' + (lastRef.tag || '?') + ' · ' + (lastRef.text || '(无文字)'),
+                      t('refLabel') + '：' + (lastRef.label || lastRef.frameName) + (lastRef.form === 'text' ? '（纯文本）' : lastRef.form === 'chip' ? '（胶囊）' : ''),
                     )
                   : h('span', { style: { flex: 1, minWidth: 0, opacity: 0.7 } }, t('refEmpty')),
                 lastRef
@@ -1742,6 +1989,34 @@ window.__ModuleLoader__.load({
           previewSessions: function () {
             return Array.from(frameCommands.keys());
           },
+          /** 最近一次引用的快照：`{payload, ref, label, reference}`（引用还没发生时返回 null）。 */
+          lastRef: function () {
+            return lastRefDebug;
+          },
+          /**
+           * 走**输入框自己**的序列化路径，验证发送时模型会收到什么。
+           * 传入 ref（省略则用最近一次引用的 ref）。这条路径证明 roster 能按 name 找到 source；
+           * 直接调 codec 只能证明 codec 本身对，证明不了接线对。
+           */
+          serializeRef: function (ref) {
+            const target = ref || (lastRefDebug ? lastRefDebug.ref : null);
+            const triggerService = optionalService(ctx, 'inputTriggers');
+            const actx = sessionScopeOf(ctx, lastPreviewSession);
+            if (!target) return Promise.reject(new Error('还没有任何引用'));
+            if (!triggerService || typeof triggerService.sessionOf !== 'function') return Promise.reject(new Error('inputTriggers 服务不可用'));
+            if (!actx) return Promise.reject(new Error('取不到会话作用域'));
+            try {
+              const controller = triggerService.sessionOf(actx);
+              return controller.serializeReference(REF_SOURCE, target, new AbortController().signal);
+            } catch (error) {
+              return Promise.reject(error);
+            }
+          },
+          /** 故障注入：把胶囊路径标记为不可用，用来复现"已降级为纯文本引用"的可见分支。 */
+          setChipAvailable: function (flag) {
+            chipSourceReady = flag === true;
+            return chipSourceReady;
+          },
         };
 
         ctx.effect(() => ctx.locale.register(NS, { zh: copy, en: copy }), 'design-preview:dictionaries');
@@ -1765,6 +2040,59 @@ window.__ModuleLoader__.load({
             }),
           ),
         );
+
+        // 引用胶囊的 @ source：注册成功，胶囊才可用（见 chipSourceReady 的说明）。
+        //
+        // 三件事都必须在 source 上：
+        // 1) `codec` —— 发送时由输入框按 name 找到它，把 ref 展开成给 agent 看的定位文本；
+        //    找不到 owner 或没有 codec 会 reject（`no serializer`），用户的发送会被拦下。
+        // 2) `candidates` 返回空数组 + `showGroupTitle:false` —— 我们不走 @ 菜单这条路，
+        //    但注册 source 是胶囊能被序列化的前提；空 ready 分组在菜单里渲染为 null，所以
+        //    用户打 @ 时看到的仍然只有文件/会话，不会被塞一个空分组。
+        // 3) `ref` 自包含 —— 草稿跨刷新持久化，序列化时只拿得到 ref 这一个字符串。
+        const inputTriggers = optionalService(ctx, 'inputTriggers');
+        if (inputTriggers && typeof inputTriggers.registerSource === 'function') {
+          const source = {
+            trigger: '@',
+            name: REF_SOURCE,
+            showGroupTitle: false,
+            candidates: function () {
+              return Promise.resolve([]);
+            },
+            onPick: function () {
+              return undefined;
+            },
+            codec: {
+              clipboardText: function (ref) {
+                const payload = decodeRef(ref);
+                return payload ? '@设计元素:' + chipLabel(payload) : '@设计元素';
+              },
+              serialize: function (ref) {
+                const payload = decodeRef(ref);
+                if (!payload) {
+                  return Promise.reject(
+                    new Error('无法解析这条设计元素引用（' + String(ref == null ? '' : ref).slice(0, 40) + '…）。请在输入框里删掉它，再重新点选元素。'),
+                  );
+                }
+                return Promise.resolve(locatorText(payload));
+              },
+            },
+          };
+          ctx.effect(() => {
+            let dispose = null;
+            try {
+              dispose = inputTriggers.registerSource(source);
+              chipSourceReady = true;
+            } catch (error) {
+              chipSourceReady = false;
+              console.error('[design-preview] 注册设计元素引用 source 失败，胶囊将不可用：', error);
+            }
+            return () => {
+              chipSourceReady = false;
+              if (typeof dispose === 'function') dispose();
+            };
+          }, 'design-preview: element reference source');
+        }
 
         // 标签类型。`guide` 是唯一入口：右侧栏的「+」与空侧栏都渲染这份清单，
         // 点一个胶囊就 openTab(kind) 打开它。

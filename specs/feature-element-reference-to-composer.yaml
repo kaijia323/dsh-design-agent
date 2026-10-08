@@ -2,7 +2,7 @@ spec:
   type: "feature"
   name: "点选设计元素 → 直接引用进对话（去掉元素属性弹层与批注）"
   id: "feature-element-reference-to-composer"
-  version: 5
+  version: 8
   updated: "2026-10-09"
   status: verified
   blocked_reason: ""
@@ -37,6 +37,24 @@ spec:
       by: lead
       version: 5
       note: "独立复验（T3）判定 7 PASS / 1 无法确认；AC3 曾按 v1 判据（activeElement）判 FAIL，经 Lead 裁定改判据不改实现后按 v2 原文复判 PASS。Lead 复核了 T3 的原始证据与可复跑脚本，并实跑 node --check / node --test 复核。"
+    - date: "2026-10-09"
+      from: verified
+      to: in_progress
+      by: lead
+      version: 6
+      note: "用户改需求：引用不要以纯文本插进输入框，要像 @文件 / 斜杠命令那样以「引用胶囊」的形式呈现（原话：不要在 DSH 的聊天框输入文字，而是应该像那个艾特符号或者调用指令的那种一样）。已确认：胶囊标签=元素文字·屏名；@ 菜单不做元素枚举。"
+    - date: "2026-10-09"
+      from: in_progress
+      to: done
+      by: lead
+      version: 7
+      note: "v8 胶囊形态实现完成并独立复验：AC1~AC8 全部 PASS（v7 的 AC5 无法确认项在胶囊形态下变成 PASS——降级路径可构造且可见）。复验期间抓出并修复 D6（inputTriggers 属性访问被吞成 null → 胶囊路径静默消失）与 D7（胶囊插入与紧邻打字并进同一条撤销记录 → 一次 Ctrl+Z 吞掉草稿）。"
+    - date: "2026-10-09"
+      from: done
+      to: verified
+      by: lead
+      version: 8
+      note: "独立复验（T5）在终版 2c603987bd84c1ef 上跑完全量回归，bundle rev 稳定、跨版本数据一律作废重跑；D7（胶囊与紧邻打字并进同一条撤销记录）修复后复验通过。"
   related: []
   goal: "在右侧栏设计预览里点一个元素时，不再弹出元素属性面板，而是把这个元素的定位信息直接写进聊天输入框；用户接着打字说明要改什么即可，元素批注交互从界面退场。"
   context: |
@@ -49,6 +67,8 @@ spec:
     - 本插件的预览面板挂在 sidebar.right.pane.tab（keyed，session 级），因此组件 props 上就有 inputActions。
     - insertText 落到 shell 自有的 Lexical 编辑器上（insertAsyncText），不依赖输入框有焦点，实现一次撤销、不会覆盖用户后续编辑（span 带 draftRev 校验）；失焦时 captureInsertion() 返回的 {start:0,end:0} 是「没有选区」的默认值而不是「文档为空」，草稿空不空只能从输入框 DOM 判（composerDraftEmpty）；setDraft 会把光标留在文档开头，因此不用它。
     - 该包文档把这条路径定义为「异步文本结果插入」的正式语义，本插件是它的第一个真实调用方。
+
+    形态变更（v6，用户原话）：「点击元素的时候，不要在 DSH 的聊天框输入文字，而是应该像那个艾特符号或者调用指令的那种一样」——引用从「整段纯文本」改为「@ 式引用胶囊」：胶囊标签 = 元素文字 · 屏名，模型文本仍由 codec.serialize 产出五行定位信息。已确认 @ 菜单不做元素枚举（只做点选插入这一条路）。
 
     交互上的取舍：不主动聚焦（不调 focus()）、不滚动、不跳视口；但为了让「引用完接着打字」落在草稿末尾，会把编辑器选区收拢到文档末尾（collapseComposerCaretToEnd，纯 DOM Range）。代价是输入框会成为 activeElement——这是为达成用户诉求（引用完直接说话）付的、且可接受的一步。
   assumptions:
@@ -91,12 +111,17 @@ spec:
     - 沙箱红线不变：iframe 仍是 sandbox="allow-scripts"，不得加 allow-same-origin。
     - 引用文本里出现的元素文字要归一化空白、截断 40 字，保证「引用 + 一句话」不把输入框撑成一段长文。
     - 不引入新依赖、不引入构建步骤；client.js 仍是单文件 __ModuleLoader__.load 形态。
+    - "引用必须以「引用胶囊」呈现（用户原话：不要在聊天框输入文字，要像 @ 符号或调用指令那种样式），不得再往输入框里插整段纯文本。"
+    - "胶囊只走输入框自己的引用管线：注册 inputTriggers 的 @ source（含 codec）+ 用 session 作用域的 slash/input-insert-reference 事件插入；不得自己往 contenteditable 里塞 DOM 或伪造节点。"
+    - "source 的 ref 必须自包含（草稿跨刷新持久化，恢复后序列化仍要能工作），不得依赖插件内存里的映射表。"
+    - "未成功注册 source 时不得走胶囊路径（否则用户发送会被 no serializer 阻塞）：此时降级为纯文本引用并明确提示。"
+    - "不得污染 @ 菜单：source 的 candidates 返回空数组且 showGroupTitle=false，打 @ 时仍只列文件/会话。"
 
   out_of_scope:
-    - 不做 @ 引用胶囊（file-reference 的领地），不改 design_status 的返回结构。
+    - 不改 design_status 的返回结构；不在 @ 菜单里枚举设计元素（本期只做「点选插入胶囊」这一条路，用户已确认）。
     - 不做「点元素即自动提交/自动发送」。
     - 不删除 .design/design.json 里的历史批注数据，也不改 host 的 comments 读写实现。
-    - 不做回滚/撤销栈（引用只是一段可删的文本，用户自己就能删）。
+    - 不做回滚/撤销栈（胶囊可用输入框自带的撤销去掉，用户自己就能删）。
     - 不动落地到项目（handoff）路径。
 
   tools:
@@ -114,65 +139,79 @@ spec:
     - 更新 README.md / docs/architecture.md，把「就地改元素 + 元素锚点批注」改成「点元素引用到对话」，并记录为什么砍。
 
   acceptance_criteria:
-    - "AC1 点选即引用：在预览 iframe 里点击任一元素（沙箱 allow-scripts、无 allow-same-origin），500ms 内聊天输入框的草稿末尾出现以「【设计元素】」开头的引用文本，且不再出现任何元素属性面板（页面上查不到「元素属性」文案与属性输入框）。"
-    - "AC2 引用内容完整且克制：引用文本包含 frame 名称、frame id、元素标签名、info.path 选择器、当前文字（≤40 字）与 .design/frames/<id>.html；不含颜色/字号/内外边距字段。元素文字超过 40 字时被截断。"
-    - "AC3 不打断、可接着写：插入后聊天列 scrollTop 与插入前一致（差值 0）、视口不跳；用户既有草稿内容一字不丢；插入后光标落在草稿末尾（用户紧接着打字落在末尾，而不是跑到整段草稿最前面）；一次撤销即可恢复到插入前的草稿。（本版修正：原 AC 写的是「document.activeElement 仍是预览侧元素」，实测为达到「接着打字」必须把选区收拢到末尾、因而输入框会成为 activeElement——这是用户要的行为，故改判据，不再把 activeElement 当验收项。）"
-    - "AC4 可连续引用：对同一屏的第二个元素再点一次，输入框里同时存在两条引用（第一条完整保留），两段之间可读。"
-    - "AC5 失败可见：构造「输入框动作面暂时不可用」（把注入表临时清空）后点元素，预览面板内出现可见的失败提示与可复制引用文本，不产生任何静默无响应。"
-    - "AC6 边界不炸：对空帧（0 字节）、超限帧、被切走的帧发点选事件，客户端不抛未捕获异常且不写入坏数据；info.text 为空串、info.path 为空串时仍能生成合法引用文本。"
-    - "AC7 批注 UI 退场且数据不丢：工具栏不再有「批注（N）」入口、点元素不再出现「就这个元素写批注」；同时 .design/design.json 里既有的 comments[] 不被删除，design_status 仍能返回它们，host 的 add_comment / resolve_comment 仍可用。"
-    - "AC8 无回归：node --check client.js 通过；node --test src/host/*.test.js 全绿；design_frame_write、落地到项目、探针 setText 通道等既有能力不被破坏（手工回归点到）。"
-
+    - "AC1 点选即出胶囊：在预览 iframe 里点任一元素（沙箱 allow-scripts、无 allow-same-origin），500ms 内聊天输入框里出现一个引用胶囊（DOM 上位于 [data-lexical-decorator] 内，渲染为 @ 标记 + 标签文本），且输入框里不再出现整段纯文本引用、也不再出现元素属性面板。"
+    - "AC2 胶囊标签与模型文本：胶囊标签 = <元素文字或标签名> · <屏名>（元素文字空白归一化、按上限截断；无文字元素回落到标签名），胶囊 title 等于该标签；发送时模型收到五行定位文本（【设计元素】屏名（frame: id）/ 元素 / 选择器 / 当前文字 / 文件），由已注册 source 的 codec.serialize 产出，且该 source 能被输入框的引用 roster 解析（不得出现 no serializer）。"
+    - "AC3 不打断、可接着写：插入后聊天列 scrollTop 与插入前一致、视口不跳；用户既有草稿内容一字不丢，胶囊落在草稿末尾；插入后光标落在末尾（紧接着打字落在末尾）；一次撤销即可去掉整个胶囊（原子节点）。"
+    - "AC4 可连续引用：连点同一屏的两个元素 → 两个胶囊都在、顺序与点击顺序一致、第一个完整保留；先打字再连点两个元素的混合场景读起来通顺（不出现胶囊与文本粘连成不可读的样子）。"
+    - "AC5 失败可见与降级：胶囊路径不可用（source 注册失败 / 取不到 session 作用域 / bail 未应用）时自动降级为纯文本引用并在面板内明确提示「已降级为纯文本引用」；两条路都不通时给出可见原因与可复制的引用文本；任何一步都不得静默。"
+    - "AC6 边界不炸：对空帧（0 字节）、超限帧、被切走的帧发点选事件，客户端不抛未捕获异常且不写入坏数据；info.text 为空串、info.path 为空串时仍能生成合法胶囊与合法序列化文本。"
+    - "AC7 批注 UI 退场、数据不丢、@ 菜单不被污染：工具栏不再有「批注（N）」入口、点元素不再出现「就这个元素写批注」；.design/design.json 里既有 comments[] 不被删除、design_status 仍能返回；键盘打 @ 打开菜单时不出现空分组，仍只列文件/会话。"
+    - "AC8 无回归：node --check client.js 通过；node --test src/host/*.test.js 全绿；切屏、落地到项目、探针 setText 通道、帧内高亮不被破坏；全程不写 .design/**。"
   verification:
-    result: "8 条 AC：7 条运行级 PASS（AC1/2/3/4/6/7/8）+ AC5 如实标注无法确认；client.js sha256[:16]=7fb7b8ebadc473b0（1821 行）全流程未变，host 测试 50/50，.design 工程零写入。"
+    result: "8/8 运行级 PASS（AC1~AC8 全过；v7 的 AC5 无法确认项在胶囊形态下变为 PASS——降级路径可构造且可见）。client.js sha256[:16]=2c603987bd84c1ef（2149 行）全程未变，host 50/50，设计契约自检与重启体检一把过，.design 全程零写入。复验期间抓出并修复 D6/D7 两个缺陷。"
     verified_by: independent
-    verifier: "teammate-verifier（T3，全程未参与实现）"
+    verifier: "teammate-verifier（T5/v8 胶囊形态，全程未参与实现）"
     verified_at: "2026-10-09"
     acceptance:
-      - criterion: "AC1 点选即引用"
+      - criterion: "AC1 点选即出胶囊"
         status: pass
-        evidence: "真空草稿点选 → [data-composer-input] 出现五行引用，13/14/17ms（预算 500ms）；body 与面板均无「元素属性」「就这个元素写批注」；右栏表单控件计数 2→2 且都是 select"
-      - criterion: "AC2 引用内容完整且克制"
+        evidence: "点选后 15~17ms 输入框出现胶囊；DOM = [data-lexical-decorator] 内 span[data-composer-chip=\"design-element\"]，含 @ 标记 + 标签 + title；反向判据成立：innerText 不匹配五行正则、无「选择器：/当前文字：/文件：」；胶囊 inline-flex 一行渲染、输入框高度 52px 不变"
+      - criterion: "AC2 胶囊标签与模型文本"
         status: pass
-        evidence: "五行逐字匹配；长文本截断为 41 字（40+…）；无文字元素 → (这个元素没有文字)；全文不含颜色/字号/内外边距"
-      - criterion: "AC3 不打断、可接着写（v2 判据）"
+        evidence: "标签「导出 · 订阅订单列表」且 title 一致；长文本元素 →「启元云 订阅中台 总览 仪表… · 订阅订单列表」；无文字元素 →「button · 订阅订单列表」；serializeRef() 走 roster 路径（inputTriggers.sessionOf(actx).serializeReference）返回逐字五行定位文本、无 no serializer；ref=@design/<base64url>，刷新页面后胶囊仍在且序列化仍成功"
+      - criterion: "AC3 不打断、可接着写"
         status: pass
-        evidence: "独立复验 5 项子判据全过：① 聊天列 scrollTop 差值 0（本会话 scrollHeight===clientHeight===680，该条空转，不作强证据）；② 视口不跳——window.scrollY 与 document.documentElement.scrollTop 全程 0、右栏几何不变 [704,0,576,720]，对照实验证明手工打 5 行与插入一条引用都不推动预览 iframe（y 三种状态都是 170）；③ 真实中文草稿「把导出按钮改成描边样式」一字不丢且仍是前缀，连点两次后仍在最前；④ 插入后敲 ZZ → …order-list.htmlZZ（落末尾）；⑤ 一次 Ctrl+Z 整条引用消失、草稿回原文（证明确为 Lexical 真实编辑）。已知副作用（不列为验收项）：activeElement 由 body → 输入框，0/50/150/400/900ms 采样一致"
+        evidence: "草稿逐字保留且在胶囊之前；胶囊落在草稿末尾；插入后敲 ZZ 落在末尾；一次 Ctrl+Z 原子去掉胶囊且草稿原文不变（D7 修复后：ABCD → 点选 → 一次撤销 → ABCD，不再依赖 2.5 秒间隔）；scrollTop 与视口不变、输入框高度 52px 不变"
       - criterion: "AC4 可连续引用"
         status: pass
-        evidence: "空草稿两条：…order-list.html\\n【设计元素】…；有草稿两条：草稿在前、两条引用依次在后、都有换行、无粘连"
-      - criterion: "AC5 失败可见"
-        status: not_run
-        evidence: "两条路（props / 桥）都通时失败分支不可达；清空桥后 props 路仍插入成功。仅有代码级证据（refFailed 分支 + 面板内 error 横幅 + 状态条保留复制按钮），未取得运行级证据"
+        evidence: "连点两个元素 = 2 个胶囊、顺序与点击顺序一致、第一个完整保留；先打字再连点的混合场景草稿在最前、无粘连；一次撤销只掉最后一个胶囊、两次全掉"
+      - criterion: "AC5 失败可见与降级"
+        status: pass
+        evidence: "setChipAvailable(false) 实测：0 胶囊 + 五行纯文本 + 面板可见「引用胶囊不可用，已降级为纯文本引用：…」+ 状态条「（纯文本）」；恢复后回到胶囊、无降级提示。仅「胶囊与纯文本两条路都不通」那一层未构造（登记 unverified）"
       - criterion: "AC6 边界不炸"
         status: pass
-        evidence: "选择器指不到 / 已切走的帧 / 空文字元素：不抛异常、不写盘；0 字节帧与超限帧运行级未覆盖（已登记 unverified），沿用上一轮报告 §3.11"
-      - criterion: "AC7 批注 UI 退场且数据不丢"
+        evidence: "无效选择器 / 切走的帧 / 不存在的 frameId / info=null 都不抛异常、不写盘；空 path + 空 tag + 空 text 仍生成合法胶囊（标签「元素 · 订阅订单列表」）且序列化三处兜底齐全；未捕获异常 0"
+      - criterion: "AC7 批注 UI 退场、数据不丢、@ 菜单不被污染"
         status: pass
-        evidence: "界面零旧文案、无「批注（N）」按钮、无角标；design_status 仍返回 3 条 comments（含带 target 那条）；host 词表未改"
+        evidence: "界面零旧文案、无「批注（N）」入口；design_status 仍返回 3 条 comments；打 @ → 菜单 2 组（Files & folders 13 条 / Sessions 50 条）、空分组 0、无本插件分组（截图 ac7-at-menu-final.png）"
       - criterion: "AC8 无回归"
         status: pass
-        evidence: "node --check 退出 0；node --test src/host/*.test.js → tests 50 / suites 16 / pass 50 / fail 0（244.27ms）；切屏、落地、探针 setText 通道可用；.design/frames 三个文件 sha256 与基线逐字节相同"
+        evidence: "node --check exit 0；node --test src/host/*.test.js → tests 50 / suites 16 / pass 50 / fail 0；check-design-system 全过；post-restart-check 路由=ok 工具=3/3 数据层=ok；切屏与探针 setText 通道正常；.design/frames/*.html 三个 sha256 与基线逐字节相同"
     commands:
       - "node --check client.js -> exit 0"
       - "node --test src/host/*.test.js -> tests 50 / suites 16 / pass 50 / fail 0（duration 244.27359ms）"
+      - "node --test src/host/*.test.js -> tests 50 / pass 50 / fail 0"
+      - "node design-system/tools/check-design-system.mjs -> 全部通过"
+      - "node scripts/post-restart-check.mjs -> 路由=ok 工具=3/3 数据层=ok"
     artifacts:
       - "docs/verification-element-reference-to-composer.md（§一 结论摘要 / §五 独立复验 §5.1~§5.8）"
       - ".playwright-mcp/ac-evidence/v6-element-ref/raw-results.json"
       - ".playwright-mcp/ac-evidence/v6-element-ref/rerun-A.js ~ rerun-E.js（可复跑脚本）"
       - ".playwright-mcp/ac-evidence/v6-element-ref/defect-1-slot-crash.png（D1 崩溃现场）"
+      - "docs/verification-element-reference-to-composer.md（§六 胶囊形态独立复验 6.1~6.8，§6.7 D7 终版复跑）"
+      - ".playwright-mcp/ac-evidence/v6-element-ref/rerun-G~J.js（胶囊形态可复跑脚本）"
+      - ".playwright-mcp/ac-evidence/v6-element-ref/ac7-at-menu-final.png（@ 菜单无空分组）"
     unverified:
-      - "AC5 失败可见（criterion 原文）：A/B 两条路都通时失败分支不可达，构造它需要往生产代码加测试桩（明确不加），只有代码级证据"
-      - "0 字节帧 / 超限帧的运行级边界：当前工程没有这两种帧，造帧会污染用户工作区，只做静态核对并沿用上一轮 §3.11 的结论"
-      - "可信鼠标点击：38% 缩放的帧上 locator.click 报 Element is outside of the viewport，改用帧内 element.click()（探针 capture 相位、不检查 isTrusted）与探针 selectPath 通道"
-      - "AC3 的 scrollTop 判据空转：本会话 scrollHeight === clientHeight，差值 0 不构成证据；已改用 window.scrollY + iframe 几何 + 手工打 5 行的对照实验"
+      - "AC5 失败可见与降级 的「胶囊与纯文本两条路都不通」那一层：不可达，构造它需要往生产代码加测试桩（明确不加），只有代码级证据"
+      - "0 字节帧 / 超限帧的运行级边界：当前工程没有这两种帧，造帧会污染用户工作区，只做静态核对"
+      - "AC3 不打断、可接着写 的 scrollTop 子判据空转：本会话 scrollHeight === clientHeight，差值 0 不构成「不滚动」的有效证据；改以视口测量 + 对照实验支撑"
+      - "可信鼠标点击：38% 缩放帧上 locator.click() 报 Element is outside of the viewport，改用帧内 element.click() 与探针 selectPath 通道（仍进生产 onSelectElement）"
 
   follow_ups:
     - "F1（低）：client.js 里 insertReferenceIntoComposer 的注释仍写「insertText 会把插入点留在写入内容之后」，与事实相反（正因此才需要 collapseComposerCaretToEnd）。行为正确、注释错误；为不动冻结 sha 未改，下次改动时一并修"
     - "F2（中）：批注在画布上既不能写、画布也不再展示，但 design_status 仍会返回存量 comments；若将来恢复任何批注视图，需要先决定是否把 add_comment 重新接回 UI"
     - "F3（低）：AC5 的失败分支缺一个不改生产的构造手段；若要让它可验，需要给调试钩子加一个「让 insertText 返回 false」的开关（属于测试面改动）"
+    - "F1（低）：同一条撤销边界里「打字 → 点元素 → 再接着打字」时，最后那次打字会与胶囊并成一步撤销（用户自己的最近输入同步回退）。已实测并写入报告 §6.7，不违反 AC3，但属平台历史记录语义，若用户在意需在上游给 insertReference 加 history tag"
+    - "F2（中）：批注在画布上既不能写也不展示，但 design_status 仍返回存量 comments；若将来恢复批注视图，需先决定是否把 add_comment 接回 UI"
+    - "F3（低）：@ 菜单不列出设计元素（本期明确不做）；若要做需把沙箱帧内元素经探针枚举回来接进 source.candidates"
 
   failure_handling:
+    - scenario: "inputTriggers 服务找不到 / source 注册失败（服务名或版本差异）"
+      handling: "不启用胶囊路径，点选直接走纯文本引用，并在面板内提示「胶囊不可用，已降级为纯文本引用」；绝不插一个序列化不了的胶囊（那会让用户发送时被 no serializer 拦下）。"
+    - scenario: "取不到 session 作用域 ctx（sessions.scope(id) 返回 undefined），或 slash/input-insert-reference 未被应用（返回非 true）"
+      handling: "判定为胶囊插入失败 → 用同一 span 直接走纯文本插入（此时编辑器未被修改，span 仍有效），并提示已降级。"
+    - scenario: "草稿在刷新后恢复、旧胶囊的 ref 无法解码"
+      handling: "codec.serialize 抛出可读错误（按契约「失败阻塞发送、绝不静默降级为剪贴板文本」），错误说明是哪条引用无法解析。"
     - scenario: "inputActions 尚未就绪（聊天列未挂载、会话不可写、plan/goal 等冻结态）"
       handling: "insertText 返回 false 或不可用 → 重试一次（重新 captureInsertion）→ 仍失败则在预览面板内报可见错误，并把引用文本放进可复制卡片（复用已有降级卡片形态），不静默。"
     - scenario: "用户正在输入过程中（draftRev 在 capture 与 insert 之间变化）"
