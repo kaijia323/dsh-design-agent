@@ -4,7 +4,7 @@
 - 独立复验：**teammate-verifier**（T3，全程未参与实现）—— 结论见 [§五](#五独立复验结论teammate-verifier--t3-填)
 - 静态证据整理与文字核对：teammate-docs（T2，只整理 T1/T3 的结论，不产生运行级结论）
 - 日期：2026-10-09（Asia/Shanghai）
-- 验收对象：[`specs/feature-element-reference-to-composer.yaml`](../specs/feature-element-reference-to-composer.yaml)（v3，AC1~AC8；其中 AC3 已按 Lead 2026-10-09 裁定改为"不打断、可接着写"，见 §3.3）
+- 验收对象：[`specs/feature-element-reference-to-composer.yaml`](../specs/feature-element-reference-to-composer.yaml)（AC1~AC8。**版本号会随状态推进 +1**：本报告写作期间文件从 v1 走到 v3，Lead 用 `spec_status.py` 收尾后最终为 **version 5 / status verified**（2026-10-09，`verified_by: independent`，验证人 teammate-verifier）；AC3 的那次裁定收录在 **status_log 的 v3 条目**里，对版本请以文件内 `status_log` 为准）
 - 真实环境：DSH Web GUI `http://127.0.0.1:3080`（真实 Chromium，playwright-mcp 驱动）
 - 被验版本（冻结 sha256 前 16 位）：
 
@@ -133,7 +133,7 @@ GUI 未认证访问返回 401，需要登录 cookie（自签方式见 [画布形
 
 > AC3 不打断、可接着写：插入后聊天列 scrollTop 与插入前一致（差值 0）、视口不跳；用户既有草稿内容一字不丢；插入后光标落在草稿末尾（用户紧接着打字落在末尾，而不是跑到整段草稿最前面）；一次撤销即可恢复到插入前的草稿。（本版修正：原 AC 写的是「document.activeElement 仍是预览侧元素」，实测为达到「接着打字」必须把选区收拢到末尾、因而输入框会成为 activeElement——这是用户要的行为，故改判据，不再把 activeElement 当验收项。）
 
-> 本节引用的 AC 原文已在 **SPEC v3** 里按上述文本替换。
+> 本节引用的 AC 原文已按上述文本替换；这次改判据收录在 `specs/feature-element-reference-to-composer.yaml` 的 **status_log v3 条目**（该文件收尾后为 **version 5 / status verified**——版本号随状态推进 +1，别拿本报告里出现的号去对文件）。
 
 **实现侧证据**
 
@@ -336,11 +336,11 @@ GUI 未认证访问返回 401，需要登录 cookie（自签方式见 [画布形
 | ⑤ 一次撤销即可恢复到插入前的草稿 | ✅ `Ctrl+Z` 一次整条引用消失、草稿回原文——证明是 Lexical 的真实编辑而非 DOM 塞字 |
 | 补充实测（观察项，不在新判据内） | `document.activeElement`：插入前 `body` → 插入后 `composer`，0/50/150/400/900ms 采样一直是 composer；`Ctrl+Shift+Z` 重做未恢复引用 |
 
-> **改判说明（原 FAIL → 现 PASS）**：本节最初按 SPEC v1 原文判 **FAIL**，理由是插入后 `document.activeElement` 变成输入框，与旧原文「仍是预览侧元素（不是输入框）」不符。Lead 随后裁定**改判据、不改实现**：那条是设计阶段自加的技术细节，而用户诉求是"引用完直接在聊天框里说话"，把选区收拢到文档末尾正是达成它的手段、`activeElement` 成为输入框是该手段的代价。SPEC 已更新（文件内 `version: 3`，status_log 记录了这次裁定），新 AC3 原文为「不打断、可接着写：……scrollTop 差值 0、视口不跳；草稿一字不丢；光标落在草稿末尾；一次撤销可恢复」，constraints 同步改为「允许把编辑器选区收拢到文档末尾……但不允许因此产生滚动、视口跳动或草稿损失」。
+> **改判说明（原 FAIL → 现 PASS）**：本节最初按 SPEC v1 原文判 **FAIL**，理由是插入后 `document.activeElement` 变成输入框，与旧原文「仍是预览侧元素（不是输入框）」不符。Lead 随后裁定**改判据、不改实现**：那条是设计阶段自加的技术细节，而用户诉求是"引用完直接在聊天框里说话"，把选区收拢到文档末尾正是达成它的手段、`activeElement` 成为输入框是该手段的代价。SPEC 已更新（status_log 记录了这次裁定；文件头的版本号此后继续随状态推进递增，本节不钉死具体数字），新 AC3 原文为「不打断、可接着写：……scrollTop 差值 0、视口不跳；草稿一字不丢；光标落在草稿末尾；一次撤销可恢复」，constraints 同步改为「允许把编辑器选区收拢到文档末尾……但不允许因此产生滚动、视口跳动或草稿损失」。
 >
 > 依新原文 5 项子判据全部满足 → **AC3 改判 PASS**。改动只发生在判据文本与本节判定；**被验物 `client.js` 未变（仍 `7fb7b8ebadc473b0`，1821 行），其它 AC 的结论与证据未重跑、未改动**。判定基准变更时间：2026-10-09（Lead 裁定）。
 >
-> 注：Lead 通知里写"version 2"，`specs/feature-element-reference-to-composer.yaml` 实际是 `version: 3`（v2 = ready→in_progress，v3 = 收录 AC3 裁定）；以文件为准。
+> 注：Lead 通知里写"version 2"，指的是 **AC3 判据的第 2 版**（判据版本）；spec 文件头的 `version:` 是**文档版本**，随 status_log 递增（收录这场裁定时读到的是 3，成稿时已因后续状态推进继续变化）。两者不矛盾——引用时请说"AC3 判据第 2 版"，不要拿文件头的数字去指判据版本。
 
 **AC4（最终版实际文本）**
 

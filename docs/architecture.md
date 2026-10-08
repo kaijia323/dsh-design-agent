@@ -47,7 +47,7 @@ DSH 原生插件：用户在对话里说需求，agent 以「**每屏一个真�
 
 1. **输入框失焦时 `captureInsertion()` 返回 `{start: 0, end: 0}`** —— 那是"没有选区"的默认值，**不等于文档为空**。拿它判空草稿，两条引用就会首尾相粘（少了分隔符）。判空要用 `composerDraftEmpty()`，分隔符规则只有一条：**草稿非空就前置一个换行**。
 2. **"不主动聚焦"不等于"焦点不会变"**：`insertText` 之后编辑器会把选区留在文档开头，用户接着敲字会跑到引用前面去（实测 `ZZ【设计元素】…`）。所以插入成功后要显式把光标收拢到草稿末尾（`collapseComposerCaretToEnd()`，纯 DOM `Range`，同步 + `rAF` + 60ms 各做一次，**依然不调 `focus()`**；实测随后敲字落在末尾 `REF-1ZZ`）。只做一次不够——Lexical 提交 DOM 更新与聚焦时的 reconciliation 都可能把选区改回去。
-   **最终口径（Lead 2026-10-09 裁定，别再改回去）**：插入路径**不调用 `focus()`、不滚动、不跳视口**；为了让用户"引用完接着打字"落在末尾，**会主动把编辑器选区收拢到文档末尾，输入框因此成为 `document.activeElement`**——这是为达成用户诉求付的、且刻意选择的一步，**不是缺陷**。AC3 的判据也据此改成"不打断、可接着写"（不滚动/不跳视口、草稿一字不丢、光标落在末尾、一次撤销可恢复），`activeElement` 不再计入验收（见 SPEC v3 与 `docs/verification-element-reference-to-composer.md` §3.3）。**文档里不要写"不抢焦点"**，写"不主动聚焦 + 收拢选区到末尾"。
+   **最终口径（Lead 2026-10-09 裁定，别再改回去）**：插入路径**不调用 `focus()`、不滚动、不跳视口**；为了让用户"引用完接着打字"落在末尾，**会主动把编辑器选区收拢到文档末尾，输入框因此成为 `document.activeElement`**——这是为达成用户诉求付的、且刻意选择的一步，**不是缺陷**。AC3 的判据也据此改成"不打断、可接着写"（不滚动/不跳视口、草稿一字不丢、光标落在末尾、一次撤销可恢复），`activeElement` 不再计入验收（裁定记录见 `specs/feature-element-reference-to-composer.yaml` 的 status_log v3 条目；该文件 2026-10-09 收尾为 version 5 / status verified；详见 `docs/verification-element-reference-to-composer.md` §3.3）。**文档里不要写"不抢焦点"**，写"不主动聚焦 + 收拢选区到末尾"。
 
 ## 三条不可动摇的产品取舍
 
