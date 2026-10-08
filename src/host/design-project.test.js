@@ -28,7 +28,7 @@ import { ERROR_CODES, MAX_FRAME_BYTES } from './types.js';
 /** 每个用例一个隔离的 workspace 根。 */
 let root;
 before(async () => {
-  root = await mkdtemp(join(tmpdir(), 'design-canvas-test-'));
+  root = await mkdtemp(join(tmpdir(), 'design-agent-test-'));
 });
 after(async () => {
   await rm(root, { recursive: true, force: true });

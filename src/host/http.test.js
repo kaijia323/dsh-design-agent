@@ -22,7 +22,7 @@ import { MAX_BODY_BYTES, ROUTE_PATH } from './types.js';
 /** 真实临时工作区，作为唯一被允许的写入目标。 */
 let workspace;
 before(async () => {
-  workspace = await mkdtemp(join(tmpdir(), 'design-canvas-http-'));
+  workspace = await mkdtemp(join(tmpdir(), 'design-agent-http-'));
 });
 after(async () => {
   await rm(workspace, { recursive: true, force: true });

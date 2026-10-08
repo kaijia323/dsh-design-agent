@@ -130,7 +130,7 @@ async function checkApi() {
 
 async function checkDataLayer() {
   banner('3/4 数据层读写（真实临时目录）');
-  const cwd = await mkdtemp(join(tmpdir(), 'design-canvas-postcheck-'));
+  const cwd = await mkdtemp(join(tmpdir(), 'design-agent-postcheck-'));
   try {
     line(`  工作区：${cwd}`);
 
