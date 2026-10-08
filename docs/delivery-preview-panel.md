@@ -1,7 +1,7 @@
 # 设计预览面板（v5）交付说明
 
 > 归属：T3（teammate-canvas）独占维护。
-> 对应产物：`client.js`（sha256[:16] = `0798bc7a5ac00216`，1584 行，冻结版本）。
+> 对应产物：`client.js`（sha256[:16] = `905699f2e2c125ce`，1592 行，冻结版本）。
 > 冻结后任何改动都要重新复核本文件第 4 节的验证方式。
 
 ---
@@ -36,6 +36,7 @@
 - **批注角标**：探针在帧内给有批注的元素画编号角标；**锚点失效时角标消失，但工具栏「批注（n）」仍能打开列表并显示「未锚定 + 原文」**，绝不静默丢弃。
 - **guide 入口**：`sidebarRightTabs.register({ guide: [...] })`。右侧栏的 `+` 添加控件与空侧栏渲染的都是 guide 页，所以入口天然可见，无需另做按钮。
 - **延迟自动打开**：`.design/` 从"没有 / 0 屏"变成"有 frame"时记一个待开标志，等 `session.running === false` 且键盘空闲 1.5 s 再开一次；5 分钟超时丢弃；面板一旦挂载即 `markOpened` 收手（用户手动开的也算）。
+  **状态：已实现，但未通过验证**（记为 unverified + follow_up）。独立验收把 `.design/` 临时挪走造空态，仍无法得到一个可判定的初始态，因此这条**没有通过/失败的结论**，不能当作已验证。本文件第 4 节与 §3 均不依赖它。
 
 ---
 
@@ -144,15 +145,18 @@
 | 落地到项目（AC9） | 点按钮 → 降级卡片出现且指令文本填入真实 frame；控制台无未捕获异常 |
 | 实时刷新（AC7） | `workspaceFiles.changes` + 900 ms stat 轮询双保险；本项目未删除该链路 |
 | 沙箱（AC10） | 帧内自测回报 `opaqueOrigin=true`、`parent.document`/`cookie` 均 `SecurityError`，控制台可见；**判定方式见第 5 节** |
-| 自动打开 | 需要"从无到有"边沿：临时移开 `.design/` 造空态后放回，观察标签是否在空闲时自动打开（由 T5 正式验收） |
+| 自动打开 | **未验证**：需要"从无到有"边沿；独立验收把 `.design/` 临时挪走造空态后仍无法得到可判定的初始态，故无通过/失败结论（unverified + follow_up） |
 
 静态自检（每次改动都应重跑）：
 
 ```bash
 node --check client.js
-node /tmp/canvas-smoke.mjs     # 座位断言 + 探针源码可解析 + 组件树真挂载
+node /tmp/canvas-smoke.mjs     # 座位断言 + inject 完整性审计 + 探针源码可解析 + 组件树真挂载
 grep -c "sandbox: 'allow-scripts'" client.js   # 必须为 1
 ```
+
+冒烟脚本里的 **inject 完整性审计**是 §3.7 的护栏：它去掉注释后抽出所有 `ctx.<svc>` 与 `ctx.remote.<ns>` 访问，
+逐个比对 `inject`；白名单（`ctx.remote.commands`）还要求它确实位于 `try` 块内。新增未声明的访问会直接 `SMOKE FAIL`。
 
 ---
 
@@ -167,3 +171,20 @@ sandbox: 'allow-scripts',
 ```
 
 审查 AC10 时应当：**找到真正的 `sandbox` 属性、读它所在那几行的上下文**，而不是统计关键字出现次数；判断"帧是否拿到 opaque origin"要看帧内的 `window.origin === 'null'` 与 `parent.document` 是否抛 `SecurityError`，那才是硬证据。这条对后续维护者与独立验收者都适用。
+
+---
+
+## 6. 收尾清理记录
+
+验证素材已按计划清出交付面，最终 `.design/` 只留三屏真实设计：
+
+| frame id | 名称 | 文件 | 尺寸 |
+|---|---|---|---|
+| `order-list` | 订阅订单列表 · SaaS 后台 | `frames/order-list.html` | 1440×900 |
+| `dashboard` | 监控仪表盘 | `frames/dashboard.html` | 1440×900 |
+| `mobile-home` | 移动端首页 | `frames/mobile-home.html` | 390×844 |
+
+- 删除的 5 个夹具（经 `design_canvas_apply` 的 `delete_frame`）：`attack`、`verify-ac10-xss`、`empty`、`huge`(2.6 MB)、`hang`。**frame 条目与 html 文件同时清掉，`frames/` 无孤儿文件**（已用"design.json 声明集合 vs 磁盘文件集合"对拍验证：orphans = none、missing = none）。
+- 顺带还原了一个验证期改动的名字：`mobile-home` 曾被改名为「AC7改名验证」，已改回「移动端首页」。
+- `.design/design.json.bak`（41 B）**保留**：那是 AC11 的运行时产物（design.json 被改成非法 JSON 时 host 自动备份），属于产品行为而不是测试夹具。
+- `.design/` 仍随工作区走、未加入 `.gitignore`，符合 SPEC 中"可进 git、可 diff"的约定（AC4）。
