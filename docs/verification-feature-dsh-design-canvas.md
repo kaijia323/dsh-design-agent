@@ -32,7 +32,7 @@
 | AC6 就地改元素 | **PASS** | 点元素 → 改文字 → **文件真被改写**（`b89a69da→2a91a550`）；agent `read` 回看到新文字 |
 | AC7 自动刷新 | **PASS** | **只改 `frames/*.html`（design.json 不动）→ 1033ms**；改 design.json → 367ms；哨兵变量存活（无整页重载）；选中态保持 |
 | AC8 批注闭环 | **PASS** | 元素锚点批注带 `target` 选择器；`design_status` 完整返回；锚点失效显示 `未锚定：…原文已保留` |
-| AC9 落地到项目 | **PASS**（修复后） | 降级复制卡片正常产出 572 字指令；指令**真可执行**，agent 写出 `src/generated/order-list/index.tsx`（885 行）；**零 `.design/` 引用** |
+| AC9 落地到项目 | **PASS**（修复后） | 降级复制卡片正常产出 572 字指令；指令**真可执行**，agent 写出 `docs/evidence/handoff-output/order-list.tsx`（885 行）；**零 `.design/` 引用** |
 | AC10 沙箱安全 | **PASS** | 8 个攻击面全部 `SecurityError` 拦截；对照组证明素材真能打穿；无 `allow-same-origin` |
 | AC11 边界容错 | **PASS** | 服务端 2MiB 阈值 7 档实测；客户端**五种占位**齐全 |
 | AC12 失败可读 | **PASS** | 真实工具路径返回 `ENOWRITE` + 失败路径 + `EACCES`，无静默成功 |
@@ -212,10 +212,10 @@ Error: cannot get property "remote.commands" without inject
 1. 点「落地到项目」→ 出现降级卡片：`命令通道不可用，已降级为复制指令。把下面这段粘进对话框即可。` + 「复制」「收起」按钮，指令文本框 **572 字符** ✓
 2. **控制台零未捕获异常**（点击前后均为 1 条 error，且那 1 条是与插件无关的 DSH 外壳 404）✓
 3. **指令真可执行**：把指令原文交给一个独立 agent 执行，它写出了
-   **`/home/dsh/codes/dsh-design-agent/src/generated/order-list/index.tsx`**（885 行 / 45,399 字节）✓
+   **`/home/dsh/codes/dsh-design-agent/docs/evidence/handoff-output/order-list.tsx`**（885 行 / 45,399 字节）✓
 4. **生成文件不含指向 `.design/` 的引用**（我自己 grep 复核）：
    ```
-   $ grep -n "\.design/" src/generated/order-list/index.tsx
+   $ grep -n "\.design/" docs/evidence/handoff-output/order-list.tsx
    (无输出) grep exit=1
    ```
    不带斜杠的 `grep '\.design'` 会命中 3 行，但都是设计稿里的示例**邮箱域名**（`hello@shiguang.design` 等），不是文件路径引用 ✓
@@ -400,7 +400,7 @@ Error: cannot get property "remote.commands" without inject
 | AC11 探针帧 `vfy-missing` | 已用 `delete_frame` 删除，工程回到 8 屏 ✓ |
 | `.design/frames` 权限 `500` | **已还原 755** ✓ |
 | `mobile-home.html` / `dashboard.html` 被就地编辑改过文字 | 保留（是验收痕迹，T3 会统一清夹具） |
-| AC9 产出 `src/generated/order-list/index.tsx` | **保留**（AC9 的物证）；如需清理请告知 |
+| AC9 产出 `docs/evidence/handoff-output/order-list.tsx` | **保留**（AC9 的物证）；如需清理请告知 |
 | 临时静态服务 `:8899` | 已关闭，`ss` 确认无监听 ✓ |
 | `.design` 是否被提交 | **没有**：`git ls-files .design/` 为空 ✓ |
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "DSH 原生画布设计插件：对话驱动 UI 设计 → 前端代码",
+  "description": "DSH 原生设计预览插件：对话驱动 UI 设计 → 前端代码",
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -16,7 +16,9 @@
     "cordis.patch.yml",
     "src",
     "locale/*.json",
-    "icon.svg"
+    "icon.svg",
+    "design-system",
+    "prompts"
   ],
   "dsh": {
     "bundle": {

@@ -2,7 +2,7 @@ spec:
   type: feature
   name: DSH 设计预览插件（对话驱动 UI 设计 → 前端代码）
   id: feature-dsh-design-canvas
-  version: 11
+  version: 12
   updated: "2026-10-09"
   status: verified
   blocked_reason: ""
@@ -73,6 +73,12 @@ spec:
       by: dsh
       version: 11
       note: "独立验收者（未参与实现）逐条复核 12 条 AC，全部 PASS；验证人非执行者本人"
+    - date: "2026-10-09"
+      from: verified
+      to: verified
+      by: lead
+      version: 12
+      note: "验收后的仓库卫生与打包修正（不改任何被验收的行为）：① 截图/预览图 11 张移出版本控制（审计显示它们占仓库体积七成且无文档引用），改为本地保留、按需重跑；② 误入索引的 Playwright 401 页面快照删除；③ 别的会话产物 feature-order-list-page.yaml 移出 specs/ 到 docs/evidence/；④ AC9 物证从 src/generated/ 移到 docs/evidence/handoff-output/（src/ 是插件发布源码树，放业务页面会跟着发布）；⑤ 修正 package.json 的 files——原先漏了运行时必需的 design-system/ 与 prompts/，本地 link 安装不过滤所以一直没暴露，真打包会退化成没有设计契约与预设模板。新增 F8（落地指令的目标路径在插件型仓库里会失灵）与 F9（发布前复核 files 与实际读取路径一致）。"
   related: []
   goal: 让用户在 DSH 聊天窗口里，通过对话让 agent 以「每屏一个真实 HTML」为单位设计 UI；用户在右侧预览面板里边聊边看，可切换屏幕、点元素就地改文字/颜色/间距、点元素写批注，满意后由 agent 把设计落成前端代码——从而把「先设计 UI 再写前端」这条流程搬回 AI 研发链路里。
   context: |
@@ -269,7 +275,7 @@ spec:
         evidence: "元素锚点批注带 target 选择器；design_status 完整返回；断锚后显示「未锚定…原文已保留」"
       - criterion: "AC9 落代码"
         status: pass
-        evidence: "降级复制卡片产出 572 字指令且真可执行 → agent 写出 src/generated/order-list/index.tsx（885 行）→ grep '.design/' 退出码 1（零引用）"
+        evidence: "降级复制卡片产出 572 字指令且真可执行 → agent 写出组件文件（验收时位于 src/generated/order-list/index.tsx，885 行；验收后为免与插件源码树混淆，已移至 docs/evidence/handoff-output/order-list.tsx）→ grep '.design/' 退出码 1（零引用）"
       - criterion: "AC10 安全（失败路径）"
         status: pass
         evidence: "8 个攻击面全部 SecurityError；对照组（无 sandbox）真把顶层跳到 example.com；日志归属 3080 命中 8 / 8899 命中 0 / escape 警告命中 0"
@@ -293,6 +299,8 @@ spec:
     - "F5（中，触发条件：要给「自动打开」定论时）：「`.design/` 首次出现自动打开预览面板」**无法验证**——抑制状态只能靠「用户手动关闭面板」构造，而手动关闭本身就会触发抑制，于是无法区分「没实现」与「被正确抑制」。必须先给抑制状态一个可重置/可观测的手段才能验；在此之前该能力在 SPEC 的 verification.unverified 里如实标注。"
     - "F6（低）：批注锚点失效后，需要手动刷新才显示「未锚定」；P1 可改为文件变更时即时重算锚点。"
     - "F7（低）：切换会话时右侧栏的预览面板会消失（右侧栏布局状态跨会话延续），用户可能误以为「设计稿不见了」；P1 可记住每个会话的面板开合状态。"
+    - "F8（中，触发条件：下一轮动 client.js 时）：AC9 的落地指令让人「看 `src/` 的现有目录、跟随现有约定」，在**插件型仓库**里会失灵——本仓库 `src/` 下只有插件后端代码，且 `src/` 正是 `package.json` 的 `files`/`exports` 发布范围（验收时执行 agent 因此把页面写进了 `src/generated/`，会跟着插件一起发布）。建议指令里补一句：目标路径若落在包的 `files`/`exports` 发布范围内，改写 `<workspace>/design-preview/` 之类的工作区目录，或先问用户。改这句话要动 client.js 的 `handoffInstruction()`，需重新冻结并让独立验收者复查 AC9，故不在本版做。"
+    - "F9（低，触发条件：将来要发布到 npm / 打包分发时）：本次已修 `package.json` 的 `files`——原先漏了运行时必需的 `design-system/` 与 `prompts/`（`index.js` 激活时读 `prompts/design-conventions.md`，`design-project.js` 初始化工程时读 `design-system/tokens/index.json` 与 `templates/`）。本地目录 link 安装不过滤 `files`，所以一直没暴露；真打包会退化成「没有设计契约、没有预设模板」。发布前请再核一次 `files` 与实际读取路径一致。"
   failure_handling:
     - scenario: 插件安装进 profile 失败或客户端模块不合法（报 __ModuleLoader__ 相关错误）
       handling: 回退到最小可加载骨架逐层定位；不修改 DSH 自身代码绕过。
