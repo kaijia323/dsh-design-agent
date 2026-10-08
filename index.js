@@ -7,7 +7,7 @@
  *
  * 形态要求（T1 冻结）：只导出 `inject` 与 `apply`，不要混用 service class。
  *
- * @module @local/dsh-design-agent
+ * @module dsh-design-agent
  */
 
 import { readFile } from 'node:fs/promises';

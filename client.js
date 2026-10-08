@@ -1,5 +1,5 @@
 /**
- * Design Preview — 客户端半（`@local/dsh-design-agent`）。
+ * Design Preview — 客户端半（`dsh-design-agent`）。
  *
  * 形态：聊天旁边的设计预览框，**只挂在右侧栏标签页**（scope 是 session，
  * 天然表达"这是当前这个工作区的设计稿"）。没有无限画布：没有平移、缩放、
@@ -20,7 +20,7 @@
  */
 
 window.__ModuleLoader__.load({
-  id: '@local/dsh-design-agent',
+  id: 'dsh-design-agent',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
