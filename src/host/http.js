@@ -27,23 +27,33 @@ export { ROUTE_PATH };
 /**
  * 统一的 JSON 响应。始终带 `{ok:true,...}` 或 `{ok:false,error}` 信封，
  * 客户端只需读 `body.ok`，不必分支状态码（状态码仍然给 curl/验收用）。
+ * @param {import('node:http').ServerResponse} res
+ * @param {number} status
+ * @param {unknown} payload
+ * @param {Record<string, string>} [extraHeaders] - 例如超限时补 `connection: close`。
  */
-function sendJson(res, status, payload) {
+function sendJson(res, status, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload);
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
     'content-length': Buffer.byteLength(body),
+    ...extraHeaders,
   });
   res.end(body);
 }
 
 /** 中文失败信封。 */
-function sendError(res, status, code, message, path) {
-  sendJson(res, status, {
-    ok: false,
-    error: { code, message, ...(path === undefined ? {} : { path }) },
-  });
+function sendError(res, status, code, message, path, extraHeaders) {
+  sendJson(
+    res,
+    status,
+    {
+      ok: false,
+      error: { code, message, ...(path === undefined ? {} : { path }) },
+    },
+    extraHeaders,
+  );
 }
 
 /**
@@ -80,25 +90,58 @@ function isJsonContentType(value) {
 }
 
 /**
- * 有上限地读 body：超过上限立刻中止，绝不无界缓冲。
+ * 有上限地读 body：超过上限立刻停止读取，但**绝不在这里销毁 socket**。
+ *
+ * 踩过的坑：早先写成"超限就 `req.destroy()` 再回 413"，结果是 socket 先没了、
+ * 413 根本写不出去，curl 只看到 `HTTP 100` + `Empty reply from server`（exit 52），
+ * 浏览器侧是 `Failed to fetch`。护栏拦住了写入是对的，但对外契约里的 413 变成了不可读。
+ *
+ * 现在的做法：`req.pause()` 停流 + 返回结果，由调用方带着 `connection: close`
+ * 把 413 写完，再让 Node 关闭连接。
+ *
  * @returns {Promise<{ok: true, text: string} | {ok: false, tooLarge: boolean}>}
  */
-async function readBody(req) {
-  const chunks = [];
-  let size = 0;
-  try {
-    for await (const chunk of req) {
+function readBody(req) {
+  return new Promise((resolve) => {
+    /** @type {Buffer[]} */
+    const chunks = [];
+    let size = 0;
+    let settled = false;
+
+    /** 收尾：解绑监听、只 resolve 一次。 */
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      req.off('data', onData);
+      req.off('end', onEnd);
+      req.off('error', onError);
+      resolve(result);
+    };
+
+    /** @param {Buffer} chunk */
+    function onData(chunk) {
       size += chunk.length;
       if (size > MAX_BODY_BYTES) {
-        req.destroy();
-        return { ok: false, tooLarge: true };
+        // 只停读，不销毁：销毁会让 413 写不出去（见上面的注释）。
+        req.pause();
+        settle({ ok: false, tooLarge: true });
+        return;
       }
       chunks.push(chunk);
     }
-  } catch {
-    return { ok: false, tooLarge: false };
-  }
-  return { ok: true, text: Buffer.concat(chunks).toString('utf8') };
+
+    function onEnd() {
+      settle({ ok: true, text: Buffer.concat(chunks).toString('utf8') });
+    }
+
+    function onError() {
+      settle({ ok: false, tooLarge: false });
+    }
+
+    req.on('data', onData);
+    req.on('end', onEnd);
+    req.on('error', onError);
+  });
 }
 
 /**
@@ -200,12 +243,20 @@ export async function handleDesignApi(ctx, req, res) {
   // 护栏 4：body 上限 4MB。
   const body = await readBody(req);
   if (!body.ok) {
-    sendError(
-      res,
-      body.tooLarge ? 413 : 400,
-      ERROR_CODES.UNKNOWN,
-      body.tooLarge ? `请求体超过 ${MAX_BODY_BYTES} 字节上限，已拒绝。` : '读取请求体失败。',
-    );
+    if (body.tooLarge) {
+      // 带 connection: close 把 413 写完，让 Node 在响应后关连接；
+      // 请求体已被 pause，不会再被读进内存。
+      sendError(
+        res,
+        413,
+        ERROR_CODES.UNKNOWN,
+        `请求体超过 ${MAX_BODY_BYTES} 字节（4MiB）上限，已拒绝；请改用 applyCanvasOps 分批提交。`,
+        undefined,
+        { connection: 'close' },
+      );
+    } else {
+      sendError(res, 400, ERROR_CODES.UNKNOWN, '读取请求体失败。');
+    }
     return;
   }
 

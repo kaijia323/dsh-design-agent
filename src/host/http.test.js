@@ -336,4 +336,34 @@ describe('真实 socket（不是 mock req/res）', () => {
       assert.equal(response.headers.get('allow'), 'POST');
     });
   });
+
+  it('真实 socket：body 超过 4MiB 必须回 413 + JSON 信封，不能是连接重置', async () => {
+    await withServer(async (base) => {
+      const huge = Buffer.alloc(MAX_BODY_BYTES + 4096, 0x20); // 4MiB + 4KiB
+      /** @type {Response} */
+      let response;
+      try {
+        response = await fetch(`${base}/design-canvas/api`, {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            origin: base,
+            'sec-fetch-site': 'same-origin',
+          },
+          body: huge,
+        });
+      } catch (error) {
+        // 连接被重置时 fetch 直接 reject —— 这正是要防的回归（客户端只会看到 "Failed to fetch"）
+        assert.fail(`超限请求应拿到 413 响应，实际连接失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+
+      assert.equal(response.status, 413, '必须是 413，而不是连接重置');
+      const text = await response.text();
+      assert.ok(text.length > 0, '响应体不能为空（空响应 = 客户端拿不到原因）');
+      const body = JSON.parse(text);
+      assert.equal(body.ok, false);
+      assert.equal(typeof body.error.code, 'string');
+      assert.match(body.error.message, /上限/u);
+    });
+  });
 });
