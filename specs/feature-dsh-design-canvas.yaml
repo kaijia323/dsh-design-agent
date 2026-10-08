@@ -2,7 +2,7 @@ spec:
   type: feature
   name: DSH 设计预览插件（对话驱动 UI 设计 → 前端代码）
   id: feature-dsh-design-canvas
-  version: 5
+  version: 6
   updated: "2026-10-08"
   status: ready
   blocked_reason: ""
@@ -37,6 +37,12 @@ spec:
       by: lead
       version: 5
       note: 用户指出"左侧栏是全局的，看不出设计跟着哪个工作区"，要求改为右侧栏选项、点击打开当前工作区的 .design。挂载点收敛为唯一：只注册右侧栏 session 级标签，删除 sidebar.panellist 左侧入口与 main 主面板座位；AC1 重写为"右侧栏入口 + 跟随当前工作区切换 + 左侧栏不得有入口"；constraints 增加"挂载点唯一"约束；并要求 .design/ 首次出现时自动打开该标签。
+    - date: "2026-10-08"
+      from: ready
+      to: ready
+      by: lead
+      version: 6
+      note: 独立验收者指出 AC9 走了降级方案（复制指令卡片）却未登记，违反 prompts/design-handoff.md 第 7 节"不得静默降级"。裁定：P0 接受降级、登记为 follow_up F1（主方案 session command 需重启 host 才生效，不在本版做），并明确 AC9 的判定口径（多一步手动粘贴不算 fail，但指令必须真可执行、agent 必须真写出文件）。同时登记 F2（批注锚点选择器可能失效，当前行为是未锚定但不丢弃）。
   related: []
   goal: 让用户在 DSH 聊天窗口里，通过对话让 agent 以「每屏一个真实 HTML」为单位设计 UI；用户在右侧预览面板里边聊边看，可切换屏幕、点元素就地改文字/颜色/间距、点元素写批注，满意后由 agent 把设计落成前端代码——从而把「先设计 UI 再写前端」这条流程搬回 AI 研发链路里。
   context: |
@@ -221,7 +227,9 @@ spec:
     - "AC11 边界容错：frame HTML 为 0 字节、或超过 2 MiB（=2,097,152 字节，实现必须用这个阈值而非十进制 2,000,000）时，预览面板不崩溃并显示明确错误占位与「重新加载」；design.json 被手工改成非法 JSON 时，插件回退为空工程并把坏文件另存为 design.json.bak，不抛未捕获异常。验收需覆盖 0 / 1 / 1,999,999 / 2,000,000 / 2,000,001 / 2,097,152 / 2,097,153 字节七个边界值，并报告实现的实际阈值。"
     - "AC12 失败可读：`.design/` 目录不可写时，agent 工具返回的错误信息包含失败路径与原因，且不静默成功；预览端的写操作失败时同样可见（顶部提示含宿返回的错误原因），不静默吞掉。"
   verification: {}
-  follow_ups: []
+  follow_ups:
+    - "F1（中，触发条件：下一轮动 host 层时）：AC9 的「落地到项目」目前走**降级方案**——client.js 生成一段可复制的落地指令（界面原文「命令通道不可用，已降级为复制指令」），用户手动粘进对话框。主方案是 host 注册一个低频 session command（如 /design-handoff）+ 客户端用 `ctx.remote.commands.execute` 直投。降级本身 P0 可接受，但按 `prompts/design-handoff.md` 第 7 节要求必须登记在此，不得静默降级。补主方案需要重启 `dsh web` 才生效（host 模块缓存），故不在本版做。"
+    - "F2（低，触发条件：发现批注锚点频繁失效时）：批注锚点是元素选择器路径，agent 重写 HTML 后可能指不到元素（当前行为：显示为「未锚定」并保留原文，不丢弃）。P1 可考虑给元素注入稳定锚点 id。"
   failure_handling:
     - scenario: 插件安装进 profile 失败或客户端模块不合法（报 __ModuleLoader__ 相关错误）
       handling: 回退到最小可加载骨架逐层定位；不修改 DSH 自身代码绕过。

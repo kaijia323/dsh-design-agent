@@ -1,0 +1,518 @@
+spec:
+  type: feature
+  name: 订阅制 SaaS 后台订单列表页（1440×900 单屏设计稿）
+  id: feature-order-list-page
+  version: 4
+  updated: "2026-10-08"
+  status: verified
+  blocked_reason: ""
+  status_log:
+    - date: "2026-10-08"
+      from: none
+      to: ready
+      by: spec-writer
+      version: 1
+      note: "本轮前提已由用户拍板（订阅制 SaaS / 只出 1 屏 1440×900 / neutral-modern 预设 / frame id=order-list / 只做设计稿不做落地代码），14 条验收标准各带可复现的检查命令，可开工。"
+    - date: "2026-10-08"
+      from: ready
+      to: in_progress
+      by: lead
+      version: 2
+      note: "设计已落地到 frame order-list，进入独立验收"
+    - date: "2026-10-08"
+      from: in_progress
+      to: done
+      by: lead
+      version: 3
+      note: "设计稿完成并已在最终版上通过独立验收：61 条检查 0 不通过"
+    - date: "2026-10-08"
+      from: done
+      to: verified
+      by: lead
+      version: 4
+      note: "独立验收（design-verifier）在最终版 61/61 通过，0 不通过"
+  related: []
+  goal: >-
+    在 DSH 设计画布的 frame order-list 上产出一屏 1440×900 的订阅制 SaaS 后台订单列表页设计稿，
+    落到 .design/frames/order-list.html：自包含、只引用 neutral-modern 预设的 token、内容为订阅订单
+    （含新购、续费与退款），并通过本 SPEC 的全部 14 条可复现验收标准。
+  context: |
+    项目背景：本仓库是 DSH 的设计画布插件，设计真源是 .design/ 下的文件（design.json + frames/*.html + tokens.css），
+    画布只是空间容器与编辑入口。用户在对话里提出「设计一个 SaaS 后台订单列表页」，本次任务就是把这个需求落成一屏设计稿。
+
+    本轮前提（已由用户确认，直接按此执行，不要再当作问题提出）：
+    1. 业务场景：订阅制 SaaS 后台。订单 = 订阅订单，包含新购、续费与退款，不是实物电商订单
+       （不得出现「待发货 / 发货 / 物流 / 收货地址」这类语义）。
+    2. 范围：只出 1 屏，1440×900 桌面端订单列表页。不做订单详情页，不做空状态页。
+    3. 视觉预设：design-system/tokens/neutral-modern.css（中性现代 · 浅色）。该文件已被逐字拷贝为 .design/tokens.css；
+       本屏内联的 :root 必须与它逐变量一致，这样换预设只需整块替换 :root。
+    4. 落地位置：画布 frame id=order-list，文件 .design/frames/order-list.html。
+    5. 本轮只做设计稿（画布 frame）。不做「落地到项目」的代码生成，不写 src/ 下的项目代码。
+
+    现状（2026-10-08 写作时用 design_status 与 read 实测）：
+    - design.json 里 order-list 帧已存在：name=订阅订单列表 · SaaS 后台、file=frames/order-list.html、width=1440、height=900、
+      坐标 (0, 0)、status=ready；当前没有任何未处理批注。画布上另有 dashboard / mobile-home 与 4 个验收用帧，本轮都不动。
+    - .design/frames/order-list.html 眼下正由设计侧从「起步模板」改造成订阅口径，写作时的快照已经基本成形：
+      左侧导航 + 顶栏 + 页头 h1「订单」+ 筛选栏 5 项（全部 1,286 / 待支付 12 / 生效中 1,042 / 退款中 9 / 已关闭 223）+
+      数据表 9 列（行选择列 + 订单号 / 客户 / 订阅内容 / 金额 / 支付方式 / 下单时间 / 状态 / 操作）共 7 行 +
+      分页「共 1,286 条 · 每页 20 条」+ 页码 1 / 2 / 3 / … / 65。
+      该快照已满足：计数自洽（12 + 1,042 + 9 + 223 = 1,286）、必需列齐全、金额右对齐 + tabular-nums、
+      零外链零 script、内联 :root 与预设逐字一致、无 emoji / 渐变 / Lorem。
+      该快照的订阅语义已经补齐：订单号列下带了订单类型标记，7 行 = 新购 4 行 + 续费 · 自动扣款 3 行，另有 1 行退款相关（退款中）。
+      AC9（表结构 + 订阅语义）由独立验收复核一遍，确认 8 个必需列齐全，且续费与退款各至少 1 行。
+    - 因为文件在并行推进，本 SPEC 的 AC 一律按「属性」判定（例如「总数等于筛选栏『全部』的计数」），不锁死具体措辞：
+      「生效中 / 已生效」「区间写法 / 每页写法」这类同义表达都算通过；但自包含、token 纪律、计数自洽、
+      必需列齐全、行数 ≥ 7、续费与退款各 ≥ 1 行这些硬属性必须成立。
+    - .design/tokens.css 与 design-system/tokens/neutral-modern.css 逐字一致（56 个变量），无需改动。
+
+    检查口径来源：design-system/README.md（token 契约：零外链 / 零 script / 零 img / 逐字 :root / 颜色字号间距只用变量）、
+    prompts/design-conventions.md（反 AI 味清单、中文排版规则、单屏结构写法）。
+
+    已确认的边界取舍：表内订单号、客户名、邮箱、金额都是演示用的示例数据，允许出现在表格里，
+    但必须在文件头的 HTML 注释中声明为示例数据；被禁止的是编造用户评价、客户证言与「已服务 N 家团队」这类信任标记。
+  assumptions:
+    - 用户的 5 条前提视为已完成澄清，不再重复提问；本 SPEC 不保留 open_questions。
+    - 本轮只改 .design/frames/order-list.html 与它在 design.json 里的记录；不动其他帧、不动 .design/tokens.css、不动 design-system/。
+    - 表内示例数据（订单号 / 客户 / 金额 / 支付方式）是演示数据，不代表真实业务数据，只要在文件头注释里声明即可保留。
+    - 沿用现有起步模板的类名锚点（.page-head / .btn-primary / .tab / .tab-num / .amount / .num / .pager / .table-foot），
+      验收命令按这些锚点写；若执行时确实要改名，必须同时更新本 SPEC 里对应的检查命令。
+    - 验收由 Lead 在用户确认后按本 SPEC 逐条执行；本 SPEC 只负责把可判定的标准固定下来。
+  blocking_questions: []
+  open_questions: []
+
+  inputs:
+    - name: 用户需求原话
+      description: 「设计一个 SaaS 后台订单列表页」；结合已确认前提 = 订阅制 SaaS、只出 1 屏 1440×900、neutral-modern 预设。
+      source: 用户输入（DSH 对话）
+      required: true
+    - name: 设计契约
+      description: token 命名与模板硬约束（零外链、逐字 :root、颜色/字号/间距只能用变量）见 design-system/README.md；
+        反 AI 味清单、中文排版与单屏结构写法见 prompts/design-conventions.md。
+      source: 文件（仓库内）
+      required: true
+    - name: 视觉预设取值
+      description: neutral-modern 的 56 个变量（颜色 / 字体 / 字号 / 行高 / 字重 / 间距 / 圆角 / 阴影 / 布局），
+        是 frame 内联 :root 的唯一来源；.design/tokens.css 是它的逐字拷贝。
+      source: 文件 design-system/tokens/neutral-modern.css 与 .design/tokens.css
+      required: true
+    - name: 现有帧与工程状态
+      description: .design/design.json（frame 列表、尺寸、坐标、批注）与 .design/frames/order-list.html 全文
+        （起步模板，本轮的改造起点）。
+      source: 文件 + design_status 工具
+      required: true
+
+  outputs:
+    format: 单文件自包含 HTML（一屏一个文件）+ design.json 中的帧记录更新（不新增帧，只保持 order-list 的登记与文件一致）
+    schema: |
+      .design/design.json 的 frames[] 记录（本帧必须保持）：
+        { id: "order-list", name: "订阅订单列表 · SaaS 后台", file: "frames/order-list.html",
+          width: 1440, height: 900, x: 0, y: 0, status: "ready" }
+
+      .design/frames/order-list.html 的结构契约（单屏，1440×900 视口，允许纵向滚动）：
+        1) 左侧导航 aside.side：品牌位 + 分组导航（工作台 / 财务与设置）+ 当前项高亮（订单）+ 底部当前用户
+        2) 顶栏 header.topbar：搜索框（中文占位文案）+ 通知 + 次级操作（如导出报表），不放主色实心按钮
+        3) 页头 .page-head：唯一的 h1.page-title「订单」+ 一句中文副标题 + 恰好 1 个主操作（.btn-primary，如「新建订单」）
+        4) 筛选栏 .toolbar：≥4 个 .tab 状态筛选项（含「全部」），每项带 .tab-num 计数；「全部」计数 = 其余各项之和；另有次级「筛选」入口
+        5) 数据表 table：必需 8 列 —— 订单号 / 客户 / 订阅内容 / 金额 / 支付方式 / 下单时间 / 状态 / 操作
+           （允许在最前面加一列行选择复选框，表头文案为空）；tbody ≥ 7 行
+        6) 分页 .table-foot：左侧「显示 X–Y 条，共 N 条」，右侧上一页 / 页码 / 下一页
+
+      表格数据口径（示例，可直接采用，保证计数自洽）：
+        筛选项：全部 1,284 = 待支付 38 + 已生效 1,102 + 续费成功 96 + 退款中 12 + 已退款 36
+        状态取值只能来自：待支付 / 已生效 / 续费成功 / 退款中 / 已退款 / 已取消
+        表内出现的每个状态都必须在筛选栏里有同名筛选项；7 行里至少 1 行续费、至少 1 行退款相关
+        金额格式：¥12,400.00（千分位 + 两位小数，右对齐，tabular-nums）
+    path: .design/frames/order-list.html
+
+  constraints:
+    - 一屏一文件：只产出 1 个 frame（id=order-list，1440×900），不新增帧、不做详情页、不做空状态页。
+    - 文件自包含：样式内联在 <style> 里；零外链、零 <script>、零 <img>、零 <link>、零 <iframe>、零渐变。
+      （xmlns="http://www.w3.org/2000/svg" 命名空间声明与 href="#i-xxx" 片段引用不算外链。）
+    - 颜色只能写 var(--color-*) 或 color-mix(in srgb, var(--color-*) N%, transparent)；字号只能写 var(--text-*)；
+      内外边距（margin / padding / gap）只能写 var(--space-*)；1~2px 发丝线（border / outline 宽度）与 0/auto 是允许的例外。
+    - 内联 :root 必须与 design-system/tokens/neutral-modern.css 的 :root 逐变量、逐取值、逐顺序一致（56 个变量）；
+      本轮不得修改 .design/tokens.css 与 design-system/ 下任何文件。
+    - 内容必须是订阅语义：订阅内容列写「套餐 + 席位数 + 计费周期」，状态覆盖新购 / 续费 / 退款；
+      不得出现「待发货 / 发货 / 物流 / 收货地址」等实物电商字样，也不得保留起步模板里没有真实来源的经营数字（KPI 卡片区）。
+    - 中文排版：正文 ≥ 14px 且行高 ≥ 1.5；h1 用 ≥ var(--weight-semibold) 的字重 + 负字距（如 -0.02em），
+      小标签用正字距（如 0.06em）；中英文之间加空格；中文句子用全角标点。
+    - 文件体积必须小于 2 MiB（2,097,152 字节）且大于 0 字节——画布写通道的硬上限。
+    - 类名锚点（.page-head / .btn-primary / .tab / .tab-num / .amount / .num / .pager / .table-foot）沿用现有文件，
+      以便验收命令可复现；确需改名时同步更新本 SPEC 的检查命令。
+    - 单一写者：本轮 order-list.html 同一时刻只允许一个成员编辑；本 SPEC 的写范围仅 specs/。
+  out_of_scope:
+    - 订单详情页 / 抽屉 / 弹窗等二级界面
+    - 空状态、加载骨架、错误态、无权限态等特殊页面
+    - 「落地到项目」代码生成（不生成 src/ 下的组件，不下发 prompts/design-handoff.md 流程）
+    - 真实数据接入、接口联调、筛选/排序/翻页的真实交互逻辑（本轮是静态设计稿）
+    - 移动端与响应式断点（只做 1440×900 桌面端）
+    - 新增 token 变量、新增预设、修改 design-system/ 或 .design/tokens.css
+  tools:
+    - design_status
+    - design_frame_write
+    - design_canvas_apply
+    - read / write / edit / grep / glob
+    - bash（跑 AC 里的 python 检查命令与 wc -c）
+    - mcp__playwright-mcp（browser_navigate / browser_resize / browser_take_screenshot / browser_evaluate，用于在 127.0.0.1:3080 的画布上截图核对）
+
+  steps:
+    - "S1 读现状：调 design_status 确认 order-list 是 1440×900、无未处理批注；再 read .design/tokens.css 与 .design/frames/order-list.html 全文，不要凭记忆重画。"
+    - "S2 先把数据算平：确定 8 列表头、≥7 行示例数据、每个状态的行数与筛选项计数，保证「全部 = 各状态之和」并且表尾「共 N 条」与「全部」一致。"
+    - "S3 改语义：把实物电商口径换成订阅口径（订阅内容 = 套餐 + 席位数 + 计费周期；补「支付方式」列；去掉没有真实来源的 KPI 卡片区），保留可用的骨架与类名锚点。"
+    - "S4 收敛主操作：整屏只留 1 个主色实心按钮（.btn-primary）并放在页头 .page-head；顶栏与筛选栏的控件降为次级（描边 / 文字 / 分段控件）。"
+    - "S5 排版收口：正文 ≥14px 且行高 ≥1.5；h1 加字重与负字距、小标签加正字距；金额列右对齐 + tabular-nums；中英文之间加空格、中文用全角标点。"
+    - "S6 自检：逐条跑 AC1–AC14 的检查命令，如实记录输出，FAIL 的改到 PASS（不许跳过或口头放过）。"
+    - "S7 交付：回报 frame id、文件路径、字节数、逐条 AC 自检结果；状态推进（done / verified）由 Lead 在用户确认后执行，执行者不自行标注。"
+
+  acceptance_criteria:
+    - |-
+      AC1 帧与文件：design_status 返回的 frames[] 里存在 id=order-list 的帧，且 width=1440、height=900、file=frames/order-list.html；
+      .design/frames/order-list.html 的字节数落在开区间 (0, 2097152) 内（0 字节与 ≥2 MiB 都会被画布写通道拒绝）。
+      检查：调 design_status 读 frames；再跑 python3 -c "import pathlib;print(pathlib.Path('.design/frames/order-list.html').stat().st_size)"。
+      期望：帧存在、宽高精确等于 1440 与 900、字节数 ∈ (0, 2097152)；帧不存在或宽高不符即判失败。
+    - |-
+      AC2 自包含：零外链、零 script、零 img、零 link、零 iframe，样式全部内联在 <style> 块里（至少 1 个）；
+      http 字样只允许出现在 xmlns="http://www.w3.org/2000/svg" 命名空间声明里。
+      检查（仓库根目录执行）：
+        grep -n "http" .design/frames/order-list.html
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        print('script', len(re.findall(r'<script\b', s)), 'img', len(re.findall(r'<img\b', s)),
+              'link', len(re.findall(r'<link\b', s)), 'iframe', len(re.findall(r'<iframe\b', s)),
+              'style', len(re.findall(r'<style\b', s)))
+        print('外链属性', re.findall(r'(?:src|href)\s*=\s*"(?!#)[^"]*"', s), 'import', re.findall(r'@import', s))
+        PY
+      期望：script / img / link / iframe 计数全为 0；style 计数 ≥ 1；外链属性与 @import 都是空列表；grep http 的命中只剩 xmlns 那一行。
+    - |-
+      AC3 预设逐字一致：frame 内联的 :root 与 design-system/tokens/neutral-modern.css 的 :root 逐变量、逐取值、逐顺序一致（56 个变量），
+      且 .design/tokens.css 作为逐字拷贝与两者也一致（三方一致）。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        def pairs(css):
+            b = re.search(r':root\s*\{(.*?)\}', css, re.S).group(1)
+            return [(k, v.strip()) for k, v in re.findall(r'(--[a-z0-9-]+)\s*:\s*([^;]+);', b)]
+        preset = pathlib.Path('design-system/tokens/neutral-modern.css').read_text(encoding='utf-8')
+        mirror = pathlib.Path('.design/tokens.css').read_text(encoding='utf-8')
+        frame = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        inline = re.search(r'<style>(.*?)</style>', frame, re.S).group(1)
+        a, b, c = pairs(preset), pairs(mirror), pairs(inline)
+        print(len(a), len(b), len(c), 'PASS' if a == b == c else 'FAIL')
+        PY
+      期望：输出 56 56 56 PASS；少一个变量、改一个取值、调一次顺序都判失败（改法是把整块 :root 换成预设内容，不是逐条手改）。
+    - |-
+      AC4 颜色只用 token：:root 块之外不出现任何颜色字面量——没有 #hex、没有 rgb()/rgba()/hsl()、没有具名颜色；
+      颜色只能写 var(--color-*)、color-mix(in srgb, var(--color-*) N%, transparent)、transparent、currentColor、inherit。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        css = re.search(r'<style>(.*?)</style>', s, re.S).group(1)
+        css = re.sub(r':root\s*\{.*?\}', '', css, flags=re.S)
+        inline = ' '.join(re.findall(r'style="([^"]*)"', s))
+        pat = r'#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(|(?<![\w-])(?:white|black|red|blue|green|gray|grey|orange|purple|pink|yellow|brown|navy|teal|beige|ivory|silver|gold|maroon|olive|lime|aqua|fuchsia|cyan|magenta)(?![\w-])'
+        hits = re.findall(pat, css + ' ' + inline)
+        print('PASS' if not hits else 'FAIL ' + str(hits[:5]))
+        PY
+      期望：输出 PASS（命中 0 处）；命中就按报出的片段改回 token 或 color-mix 派生，不允许「就这一次」写死色值。
+    - |-
+      AC5 字号与间距只用 token：样式里每一条 font-size 的取值都是 var(--text-*)（或 inherit）；
+      每一条 margin / padding / gap / row-gap / column-gap 的取值只由 var(--space-*) 和 0 / auto 组成；
+      1~2px 的 border / outline 宽度、以及宽度高度类属性（width / height / min-width 等）不在本条范围。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        css = re.search(r'<style>(.*?)</style>', s, re.S).group(1)
+        css = re.sub(r':root\s*\{.*?\}', '', css, flags=re.S)
+        bad = []
+        for m in re.finditer(r'font-size\s*:\s*([^;}]+)', css):
+            if not re.fullmatch(r'var\(--text-[a-z0-9]+\)|inherit', m.group(1).strip()):
+                bad.append(('font-size', m.group(1).strip()))
+        for m in re.finditer(r'\b(?:margin|padding)(?:-(?:top|right|bottom|left))?\s*:\s*([^;}]+)|\b(?:gap|row-gap|column-gap)\s*:\s*([^;}]+)', css):
+            val = (m.group(1) or m.group(2)).strip()
+            for t in val.split():
+                if t in ('0', 'auto') or re.fullmatch(r'var\(--space-[0-8]\)', t):
+                    continue
+                bad.append(('spacing', val)); break
+        print('PASS' if not bad else 'FAIL ' + str(bad[:5]))
+        PY
+      期望：输出 PASS；报出的每一条都要换成最近的 --text-* / --space-* 档位（不新增档位、不用魔法数字）。
+    - |-
+      AC6 变量引用不落空（失败路径）：文件里每一处 var(--x) 引用的变量都必须在同一个文件的 :root 里定义；
+      未定义引用数为 0，避免改了变量名之后样式静默失效、页面看起来「没坏但不对」。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        sty = re.search(r'<style>(.*?)</style>', s, re.S).group(1)
+        defined = set(re.findall(r'(--[a-z0-9-]+)\s*:', re.search(r':root\s*\{(.*?)\}', sty, re.S).group(1)))
+        used = set(re.findall(r'var\(\s*(--[a-z0-9-]+)', s))
+        print('PASS' if used <= defined else 'FAIL ' + str(sorted(used - defined)))
+        PY
+      期望：输出 PASS；有未定义引用就补齐定义或改回正确变量名，不接受「反正是回退值」。
+    - |-
+      AC7 信息架构与唯一主操作：页面里 <aside> 1 个（左导航）、<header> 1 个（顶栏）、<h1> 1 个（页头主标题）、<table> 1 个，
+      分页区存在；整屏主色实心按钮（class 含 btn-primary）恰好 1 个，且它的位置在唯一 <h1> 之后、<table> 之前（也就是页头区，而不是顶栏）。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        print('aside', len(re.findall(r'<aside\b', body)), 'header', len(re.findall(r'<header\b', body)),
+              'h1', len(re.findall(r'<h1\b', body)), 'table', len(re.findall(r'<table\b', body)),
+              'pager', len(re.findall(r'class="[^"]*pager', body)),
+              'primary', len(re.findall(r'class="[^"]*btn-primary', body)))
+        i_h1, i_btn, i_tb = body.find('<h1'), body.find('btn-primary'), body.find('<table')
+        print('顺序', i_h1, i_btn, i_tb, 'PASS' if -1 < i_h1 < i_btn < i_tb else 'FAIL')
+        PY
+      期望：aside / header / h1 / table 都是 1；pager ≥ 1；primary 恰好 1；顺序判定输出 PASS。
+      另：25% 缩放下仍能一眼分辨「导航 → 页头 → 筛选 → 表格 → 分页」五个层级（在画布上缩放目视一次，作为层级自检）。
+    - |-
+      AC8 筛选计数自洽：筛选栏有 ≥4 个状态筛选项（含「全部」），每项都带数字计数；
+      「全部」的计数必须等于其余各项之和，且表内出现的每个状态在筛选栏里都有同名项。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        tabs = re.findall(r'<button class="tab[^"]*"[^>]*>\s*([^<]+?)\s*<span class="tab-num">([\d,]+)</span>', body)
+        nums = [int(n.replace(',', '')) for _, n in tabs]
+        print(tabs)
+        print('PASS' if len(tabs) >= 4 and sum(nums[1:]) == nums[0] else 'FAIL')
+        PY
+      期望：解析出 ≥4 项（每项形如 全部 1,284）且输出 PASS，即「全部」数 = 其余各项之和；
+      改行数忘了改计数是这一条最常见的失败原因，改数据后三个地方（筛选项计数 / 「全部」计数 / 表尾总数）一起改。
+    - |-
+      AC9 数据表结构与订阅语义：表头必须包含 订单号 / 客户 / 订阅内容 / 金额 / 支付方式 / 下单时间 / 状态 / 操作 这 8 个中文列名（顺序一致），
+      允许在这 8 列之外多一列行选择复选框（表头文案为空，类名 col-check）；
+      tbody 行数 ≥ 7；订阅内容列每行非空（形如「团队版 · 年付 / 12 个席位 · 到期 2027-10-08」）；
+      每行的状态都能在筛选栏里找到同名项（否则「按状态筛选」的计数就讲不通）；
+      7 行里至少 1 行能看出是「续费」订单（订单号列下的订单类型标记写「续费 · 自动扣款」/「续费」，或状态 / 订阅内容里写明「续费」）、至少 1 行是退款相关（退款中或已退款）；
+      页面可见文案里不出现「待发货 / 发货 / 物流 / 收货地址」等实物电商字样。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        ths = [re.sub(r'<[^>]+>', '', t).strip() for t in re.findall(r'<th\b[^>]*>(.*?)</th>', body, re.S)]
+        need = ['订单号', '客户', '订阅内容', '金额', '支付方式', '下单时间', '状态', '操作']
+        tabs = re.findall(r'<button class="tab[^"]*"[^>]*>\s*([^<]+?)\s*<span class="tab-num">', body)
+        tb = re.search(r'<tbody>(.*?)</tbody>', body, re.S).group(1)
+        rows = re.findall(r'<tr\b.*?</tr>', tb, re.S)
+        print('表头', ths)
+        print('缺必需列', [c for c in need if c not in ths])
+        i_sub, i_status = ths.index('订阅内容'), ths.index('状态')
+        subs, statuses, row_texts = [], [], []
+        for r in rows:
+            tds = [re.sub(r'<[^>]+>', ' ', t).strip() for t in re.findall(r'<td\b[^>]*>(.*?)</td>', r, re.S)]
+            subs.append(tds[i_sub]); statuses.append(tds[i_status]); row_texts.append(' '.join(tds))
+        print('行数', len(rows))
+        print('状态', statuses)
+        print('订阅内容', subs)
+        print('状态缺筛选项', sorted(set(statuses) - set(tabs)))
+        print('续费行', sum(1 for x in row_texts if '续费' in x), '退款行', sum(1 for x in statuses if '退款' in x),
+              '实物电商字样', re.findall(r'待发货|发货|物流|收货地址', body))
+        PY
+      期望：缺必需列为空；行数 ≥ 7；订阅内容无空值；状态缺筛选项为空；续费行 ≥ 1；退款行 ≥ 1；实物电商字样 0 命中。
+      注意：如果为了续费新增「续费成功」这个状态，筛选栏要同步加同名项并重算计数（见 AC8），三处一起改。
+    - |-
+      AC10 金额右对齐且等宽数字：金额列的单元格带 num / amount 类，样式里金额列右对齐（text-align: right），
+      并且金额所在的规则块（以及筛选计数 .tab-num、页码 .pg）带 font-variant-numeric: tabular-nums，保证数字上下对齐。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        css = re.search(r'<style>(.*?)</style>', s, re.S).group(1)
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        tb = re.search(r'<tbody>(.*?)</tbody>', body, re.S).group(1)
+        rows = len(re.findall(r'<tr\b', tb))
+        amount = len(re.findall(r'<td[^>]*class="[^"]*(?:num|amount)[^"]*"', tb))
+        rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+        tn = [sel.strip() for sel, d in rules if 'tabular-nums' in d]
+        ra = [sel.strip() for sel, d in rules if 'text-align: right' in d]
+        print('行数', rows, '金额单元格', amount)
+        print('tabular-nums 规则', tn)
+        print('右对齐规则', ra)
+        PY
+      期望：金额单元格数 = 表内行数；tabular-nums 规则的选择器覆盖 .amount / .num（以及 .tab-num / .pg）；
+      右对齐规则覆盖金额列表头与单元格；金额格式统一为 ¥12,400.00（千分位 + 两位小数）。
+    - |-
+      AC11 分页自洽：表格下方有分页区，必须给出「总条数」，并给出「当前区间 X–Y」或「每页 K 条」二者之一；
+      上一页与下一页按钮各 1 个，页码按钮 ≥ 1 个，当前页有选中标记（aria-current="page" 或 is-active）；
+      总条数必须等于筛选栏「全部」的计数；画出的行数不得超过每页条数（示意少于每页条数是允许的，但要能自圆其说）。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        total = re.search(r'共\s*(?:<strong>)?([\d,]+)(?:</strong>)?\s*条', body)
+        per_page = re.search(r'每页\s*(?:<strong>)?([\d,]+)(?:</strong>)?\s*条', body)
+        rng = re.search(r'([\d,]+)\s*[–-]\s*([\d,]+)\s*条', body)
+        tab_all = re.search(r'class="tab[^"]*"[^>]*>\s*([^<]+?)\s*<span class="tab-num">([\d,]+)</span>', body)
+        tb = re.search(r'<tbody>(.*?)</tbody>', body, re.S).group(1)
+        rows = len(re.findall(r'<tr\b', tb))
+        t = int(total.group(1).replace(',', '')) if total else None
+        k = int(per_page.group(1).replace(',', '')) if per_page else None
+        all_n = int(tab_all.group(2).replace(',', '')) if tab_all else None
+        print('总数', t, '每页', k, '区间', rng.groups() if rng else None, '全部计数', all_n, '画出行数', rows)
+        print('PASS' if t and (k or rng) and t == all_n and (not k or rows <= k) else 'FAIL')
+        print('上下页', len(re.findall(r'aria-label="上一页"', body)), len(re.findall(r'aria-label="下一页"', body)),
+              '页码按钮', len(re.findall(r'class="pg[^"]*"', body)),
+              '当前页标记', len(re.findall(r'aria-current="page"|class="pg is-active', body)))
+        PY
+      期望：输出 PASS（总数 == 筛选栏「全部」计数；每页条数或区间至少有一个；画出行数 ≤ 每页条数）；
+      上一页 / 下一页按钮各 1 个、页码按钮 ≥ 1、当前页标记 ≥ 1。
+    - |-
+      AC12 中文排版：正文（body / td / p 一类承载信息的文字）字号 ≥14px 且行高 ≥1.5（用 --text-sm 及以上、--leading-normal）；
+      h1 有字重与字距对比（font-weight ≥ var(--weight-semibold)，letter-spacing 为负值如 -0.02em），
+      至少一个小标签类（如 .nav-label / .kpi-label 一类）使用正字距（如 0.06em）；
+      中英文之间、数字与单位之间加空格（「团队版 · 20 席」而不是「团队版·20席」）；中文句子用全角标点，不出现半角逗号 / 分号 / 感叹号 / 问号。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        css = re.search(r'<style>(.*?)</style>', s, re.S).group(1)
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        texts = [t.strip() for t in re.findall(r'>([^<>]+)<', body) if t.strip()]
+        bad = [t for t in texts if re.search(r'[\u4e00-\u9fa5][A-Za-z0-9]|[A-Za-z0-9][\u4e00-\u9fa5]', t)]
+        rules = re.findall(r'([^{}]+)\{([^}]*)\}', css)
+        body_decl = ' '.join(d for sel, d in rules if re.search(r'(?:^|,)\s*body\s*(?:$|,)', sel.strip()))
+        h1_decl = ' '.join(d for sel, d in rules if 'page-title' in sel)
+        print('中英/数字紧邻', bad[:5])
+        print('body 字号', re.findall(r'font-size:\s*([^;]+)', body_decl), 'body 行高', re.findall(r'line-height:\s*([^;]+)', body_decl))
+        print('h1 字重', re.findall(r'font-weight:\s*([^;]+)', h1_decl), 'h1 字距', re.findall(r'letter-spacing:\s*([^;]+)', h1_decl))
+        print('正字距', re.findall(r'letter-spacing:\s*0\.0[0-9]+em', css))
+        PY
+      期望：中英/数字紧邻列表为空；body 规则里 font-size 是 var(--text-sm) 或更大档、line-height 是 var(--leading-normal)；
+      h1 规则里 font-weight ≥ var(--weight-semibold) 且 letter-spacing 为负；正字距至少命中 1 处；
+      全角标点与空格这两项由人工通读一次页面文案确认（这是可判定的：看到「用 Figma 做设计」这种空格、「，。」这种全角标点即通过）。
+    - |-
+      AC13 反 AI 味与内容真实性：不用 emoji 当图标（图标只能是内联统一风格 SVG 或文字）；
+      无渐变（linear-gradient / radial-gradient / conic-gradient）；无 Lorem ipsum；
+      无编造的用户评价、客户证言、评分，也没有「已服务 N 家团队 / N 万用户」这类信任标记；
+      无虚构第三方品牌名（Acme / 某某科技一类）；表内示例数据必须在文件头 HTML 注释里明确声明是示例数据。
+      检查：
+        python3 - <<'PY'
+        import re, pathlib
+        s = pathlib.Path('.design/frames/order-list.html').read_text(encoding='utf-8')
+        body = re.sub(r'<style>.*?</style>', '', s, flags=re.S)
+        vis = ' '.join(re.findall(r'>([^<>]+)<', body))
+        print('emoji', re.findall(r'[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F\u2B00-\u2BFF]', s)[:5])
+        print('渐变', len(re.findall(r'(?:linear|radial|conic)-gradient', s)),
+              'lorem', len(re.findall(r'(?i)lorem ipsum', s)))
+        print('信任标记', re.findall(r'已服务|好评|评价|证言|信赖|口碑|推荐率|Acme|某某科技', vis)[:5])
+        print('示例数据声明', re.findall(r'<!--[^>]*示例数据[^>]*-->', s)[:1])
+        PY
+      期望：emoji 空、渐变 0、lorem 0、信任标记 0 命中、示例数据声明命中 1 条；
+      「无评价 / 无信任标记」另由人工扫一眼页面确认（这两类内容 grep 不一定抓得全）。
+    - |-
+      AC14 边界与可读性：整屏在 1440×900 下不被裁切——html / body / .app / .content / .main 不得出现「写死 height + overflow: hidden」的组合，
+      body 用 min-height（不是 height）承载首屏，内容超出时纵向滚动；
+      装饰性裁剪可以保留（svg 雪碧图容器、圆角卡片的 overflow: hidden），左侧导航自身的 sticky + height: 100vh + overflow-y: auto 也允许（它是导航内部滚动，不裁切主内容）；
+      正文信息（表格里的客户、订阅内容、金额、状态、下单时间，以及页头副标题、按钮文字）不得用 --color-text-faint 承载，
+      该变量只允许出现在次要标注上：品牌角标、分组小标题、导航计数、占位符、辅助图标、版本/说明性脚注。
+      检查：
+        grep -n "overflow" .design/frames/order-list.html
+        grep -n "text-faint" .design/frames/order-list.html
+      期望：overflow: hidden 只出现在装饰性选择器（.sprite / .quota-bar / .table-card 一类）与导航内部滚动上，
+      不出现在 html / body / .app / .content / .main 的规则里；
+      text-faint 的每一处命中都逐条核对过，全部属于上面列出的次要标注白名单，没有一处落在表格正文或页头副标题上；
+      最后在 1440×900 的窗口里看一眼：底部不出现被切掉半截的行，需要时能滚动看到完整分页区。
+  verification:
+    result: "61/61 检查通过；被验 sha256 e4aa25b5…，36765 B；不通过 0"
+    verified_by: independent
+    verifier: design-verifier
+    verified_at: "2026-10-08"
+    acceptance:
+      - criterion: "AC1 帧与文件"
+        status: pass
+        evidence: "design_status → order-list 1440×900；wc -c = 36765 ∈ (0, 2 MiB)"
+      - criterion: "AC2 自包含"
+        status: pass
+        evidence: "静态脚本 fails=0：零外链/script/img/link/iframe/url()/@import"
+      - criterion: "AC3 :root 逐字一致"
+        status: pass
+        evidence: ":root 56 变量与 neutral-modern.css 逐条取值全同，:root sha256[:16]=729026296439cf04"
+      - criterion: "AC4 颜色只用 token"
+        status: pass
+        evidence: ":root 之外 0 处 #hex / rgb()，8 处 color-mix 派生"
+      - criterion: "AC5 字号与间距只用 token"
+        status: pass
+        evidence: "font-size 全走 --text-*、padding/margin/gap 全走 --space-*、line-height 全走 --leading-*"
+      - criterion: "AC6 var() 不落空"
+        status: pass
+        evidence: "脚本逐条解析 var() 引用，无未定义变量"
+      - criterion: "AC7 结构 + 唯一主操作"
+        status: pass
+        evidence: "h1 仅 1 个「订单」；.btn-primary 仅 1 个「新建订单」，在页头；左导航/顶栏/表格/分页齐备"
+      - criterion: "AC8 筛选计数自洽"
+        status: pass
+        evidence: "12 + 1,042 + 9 + 223 = 1,286 = 「全部」"
+      - criterion: "AC9 列与订阅语义"
+        status: pass
+        evidence: "缺必需列 []；行数 7；状态缺筛选项 []；续费行 3；退款行 1；实物电商字样 []"
+      - criterion: "AC10 金额对齐与等宽"
+        status: pass
+        evidence: "7 个金额单元格 text-align=right + tabular-nums，右边界均为 975px"
+      - criterion: "AC11 分页自洽"
+        status: pass
+        evidence: "共 1,286 条 / 每页 20 → 65 页；上/下页与当前页标记齐备"
+      - criterion: "AC12 中文排版"
+        status: pass
+        evidence: "正文 14px / 行高 1.65；h1 28px + 600 + -0.02em；小标签 0.06em；中英文间加空格、全角标点"
+      - criterion: "AC13 反 AI 味与内容真实"
+        status: pass
+        evidence: "零 emoji / 渐变 / Lorem / 伪造评价；示例数据已在文件头注释声明"
+      - criterion: "AC14 不裁切与 faint 限用"
+        status: pass
+        evidence: "scrollWidth/Height = 1440/900，内容底边 874.69；faint 12 处均为次要标注，正文最低 5.08:1"
+    commands:
+      - "node design-system/tools/check-design-system.mjs -> 12/12 通过，exit 0"
+      - "node --test src/host/apply.test.js src/host/design-project.test.js src/host/http.test.js -> 50 passed / 0 failed"
+      - "python3 docs/evidence/order-list-static-check.py -> SUMMARY fails=0（33 条）"
+      - "Playwright MCP 实测 1440×900：7 行行高均 60px、无横向溢出、scrollHeight=900"
+    artifacts:
+      - "docs/evidence/order-list-acceptance.md"
+      - ".playwright-mcp/ac-evidence/order-list-verify.png"
+      - "docs/design-preview/order-list-frame.png"
+    unverified:
+      - "静态设计稿，勾选/筛选/翻页/搜索的真实交互未验（本轮无脚本，属 out_of_scope）"
+      - "键盘焦点顺序与屏幕阅读器朗读未验（静态稿）"
+      - "目标字体（苹方/宋体）未在 macOS/Windows 上目视，本机为 Noto 与无衬线兜底"
+  follow_ups:
+    - "F1（中）：订单详情页、空状态与加载/错误态本轮不做；用户提出时另开 SPEC，不要在本帧上堆。"
+    - "F2（中）：本轮只做设计稿，「落地到项目」的代码生成未做；用户点画布上的「落地到项目」时按 prompts/design-handoff.md 走，并跟随项目现有技术栈。"
+    - "F3（低）：表内示例数据（订单号 / 客户 / 邮箱 / 金额）是演示数据，接入真实数据前不得对外展示或截图外发。"
+    - "F4（低）：筛选 / 排序 / 翻页是静态渲染，没有真实交互；要做成可点原型时另立需求。"
+    - "F1（中）：handoff 成组件时，8 个复选框与 tab/分页要换成真实 input[type=checkbox] 与 button 语义"
+    - "F2（低）：.quota-bar 补 role=progressbar + aria-valuenow"
+    - "F3（低）：续费行未进筛选栏，扩到「新购/续费/升级」订单类型时再评估是否加类型筛选"
+    - "F4（低）：本轮不做「落地到项目」代码生成，需要时走 prompts/design-handoff.md"
+  failure_handling:
+    - scenario: 实现时想用一个 token 之外的颜色、字号或间距（例如某个状态色、某个 18px 的标题）
+      handling: 不允许自创。改用最近的现有 token 或 color-mix(in srgb, var(--color-*) N%, transparent) 派生；确实不够用时停下来报 Lead 决策（换预设或改 tokens.css 属于另一件事，不在本轮写范围内）。
+    - scenario: 写入 .design/frames/order-list.html 被拒（0 字节、超过 2 MiB、或 HTML 不合法）
+      handling: 按 design_frame_write 的报错定位；体积超限说明内联样式或示例数据冗余，精简后整体重写，不留空帧或半截文件；重写前先从 git 取回上一版作为对照。
+    - scenario: 有人改了 .design/tokens.css 或 design-system/ 里的预设，导致 :root 与 frame 内联块不一致
+      handling: AC3 会 FAIL。把 frame 内联的 :root 整块替换为该预设的内容（不是逐条手改）；本轮不得反向修改 tokens 源文件，需要改预设时先问 Lead。
+    - scenario: 改完数据行数后筛选计数与表尾总数对不上（最常见的自相矛盾）
+      handling: 以表内实际状态分布为准重算，三处一起改：各状态筛选项计数、「全部」计数、表尾「共 N 条」；改完重跑 AC8 与 AC11。
+    - scenario: 复核时有 AC 判 FAIL
+      handling: 退回 in_progress，把失败项与实际输出写进 SPEC（不口头放过），改完重跑该条命令；有失败项时不得标 verified。
+    - scenario: 画布上看不到最新改动 / 帧内容为空
+      handling: 先确认文件确实变了（design_status 的帧信息 + 文件字节数 / mtime），再让用户在画布刷新；不要凭记忆重画整屏，也不要为了「让它刷新」去动 design.json。
+    - scenario: 示例数据被误当成真实经营数据展示
+      handling: 文件头必须保留「表内为示例数据」注释；交付说明里再口头点一次；不得把示例数字写进任何对外材料。
+  examples:
+    - input: 用户在对话里说「设计一个 SaaS 后台订单列表页」，并确认前提：订阅制 SaaS、只出 1 屏 1440×900、neutral-modern 预设、frame id=order-list、本轮只做设计稿。
+      output: >-
+        .design/frames/order-list.html 被改造成自包含单屏（实测 36,241 字节，∈ (0, 2097152)）：左侧导航（概览 / 订单 / 订阅计划 / 客户 / 结算 / 设置）+
+        顶栏（搜索 / 通知 / 导出）+ 页头（唯一 h1「订单」+ 一句话副标题 + 1 个主操作）+
+        筛选栏 5 项（全部 1,286 / 待支付 12 / 生效中 1,042 / 退款中 9 / 已关闭 223，计数自洽：12 + 1,042 + 9 + 223 = 1,286）+
+        数据表 9 列 7 行（行选择列 + 订单号 / 客户 / 订阅内容 / 金额 / 支付方式 / 下单时间 / 状态 / 操作；金额右对齐 + tabular-nums）+
+        分页「共 1,286 条 · 每页 20 条」+ 页码 1 / 2 / 3 / … / 65；内联 :root 与 neutral-modern 的 56 个变量逐字一致。
+        订单号列下带订单类型标记：新购 4 行 + 续费 · 自动扣款 3 行，退款相关 1 行（退款中）；AC9 由独立验收复核。
+    - input: 复核者按 AC4 跑颜色检查，命中 0 处；按 AC3 跑 :root 比对，输出「56 56 56 PASS」。
+      output: 两条通过，记入 verification.acceptance 的证据里（命令 + 实际输出），不需要额外说明。
