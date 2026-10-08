@@ -93,6 +93,10 @@ node scripts/post-restart-check.mjs               # 重启后：路由/工具/�
 - 画布形态：[执行契约 specs/feature-dsh-design-canvas.yaml](specs/feature-dsh-design-canvas.yaml) · [验收报告 docs/verification-feature-dsh-design-canvas.md](docs/verification-feature-dsh-design-canvas.md)
 - 元素引用：[执行契约 specs/feature-element-reference-to-composer.yaml](specs/feature-element-reference-to-composer.yaml) · [验收报告 docs/verification-element-reference-to-composer.md](docs/verification-element-reference-to-composer.md)
 
+## 协议
+
+[MIT](LICENSE)。仓库里的三套设计 token 预设、起步模板与自检脚本同样按 MIT 提供，随意取用。
+
 ## 致谢与来源
 
 设计约定里的"反 AI 味清单"、五维自检、"一次给 2~3 个方向让用户挑"这些做法，来自公开的设计方法论项目（[alchaincyf/huashu-design](https://github.com/alchaincyf/huashu-design) 等）与 [nexu-io/open-design](https://github.com/nexu-io/open-design) 的实践。本仓库不复制其代码，只借鉴方法。

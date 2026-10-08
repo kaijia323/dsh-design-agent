@@ -2,6 +2,7 @@
   "name": "@local/dsh-design-canvas",
   "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "description": "DSH 原生设计预览插件：对话驱动 UI 设计 → 前端代码",
   "exports": {
