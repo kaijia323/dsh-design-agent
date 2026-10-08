@@ -107,6 +107,8 @@ window.__ModuleLoader__.load({
       emptyReload: '重新读取工程',
       loading: '正在读取 .design 工程…',
       frameEmpty: '这一帧是空文件',
+      frameMissing: '这一帧还没有文件',
+      frameUnreadable: '这一帧读不出来',
       frameTooLarge: '内容过大，已拒绝渲染',
       frameTimeout: '渲染超时：帧内脚本可能卡死了',
       noSession: '当前没有可用的会话，无法定位 .design 工程。',
@@ -290,7 +292,15 @@ window.__ModuleLoader__.load({
       '  else { return; }',
       '  post({ type:"changed", html: "<!DOCTYPE html>\\n" + document.documentElement.outerHTML, info: describe(selected) });',
       '});',
-      'post({ type:"ready", height: document.documentElement.scrollHeight });',
+      'var sandbox = (function(){',
+      '  var facts = { opaqueOrigin: String(window.origin) === "null", parentReachable: null, parentError: null, cookieReadable: null, cookieError: null };',
+      '  try { facts.parentReachable = parent.document.title !== undefined; }',
+      '  catch (e) { facts.parentReachable = false; facts.parentError = e && e.name ? e.name : "Error"; }',
+      '  try { facts.cookieReadable = typeof document.cookie === "string" && document.cookie !== ""; }',
+      '  catch (e) { facts.cookieReadable = false; facts.cookieError = e && e.name ? e.name : "Error"; }',
+      '  return facts;',
+      '})();',
+      'post({ type:"ready", height: document.documentElement.scrollHeight, sandbox: sandbox });',
       '})();',
     ].join('\n');
 
@@ -420,6 +430,32 @@ window.__ModuleLoader__.load({
           return { ok: false, absent: absent, error: error };
         }
         return { ok: true, text: result.value && typeof result.value.text === 'string' ? result.value.text : '', version: result.value && result.value.version };
+      }
+
+      /**
+       * Stat one workspace file, so a size decision never depends on a read
+       * that a page cap would refuse anyway (AC11).
+       *
+       * @returns `{ ok: true, bytes, version }`, or a failure with `absent`.
+       */
+      async function statFile(sessionId, path, signal) {
+        if (!sessionId) return failure('EUNKNOWN', '当前没有可用的会话（session）。', path);
+        const stat = files && typeof files.stat === 'function' ? files.stat : null;
+        if (!stat) return failure('EUNKNOWN', '客户端缺少 workspaceFiles.stat，无法读取 ' + path + '。', path);
+        try {
+          const result = await stat(sessionId, path, signal);
+          if (result && result.ok === true) {
+            return {
+              ok: true,
+              bytes: result.value && typeof result.value.bytes === 'number' ? result.value.bytes : null,
+              version: result.value && result.value.version,
+            };
+          }
+          const error = remoteFailure(result, path);
+          return { ok: false, absent: error.code === 'workspace-file/not-found', error: error };
+        } catch (error) {
+          return failure('EUNKNOWN', '读取 ' + path + ' 的文件信息时出错：' + msgOf(error), path);
+        }
       }
 
       /** Read and normalize `.design/design.json`. Bad JSON falls back to an empty project (AC11). */
@@ -627,6 +663,7 @@ window.__ModuleLoader__.load({
 
       return {
         readText: readText,
+        statFile: statFile,
         readProject: readProject,
         applyCanvasOps: applyCanvasOps,
         writeFrame: writeFrame,
@@ -792,15 +829,18 @@ window.__ModuleLoader__.load({
      * `parent.document` reachable — that is the security red line for AC10.
      */
     function FrameView(props) {
-      const { frame, html, selected, selectedElement, mode, zoom, reloadToken, onSelect, onElementSelected, onElementChanged, onMoveBy, onResize, onReloadFrame, onDelete, onStartComment, t } = props;
+      const { frame, doc, selected, selectedElement, mode, zoom, reloadToken, onSelect, onElementSelected, onElementChanged, onMoveBy, onResize, onReloadFrame, onStartComment, t } = props;
 
       const iframeRef = React.useRef(null);
       const [status, setStatus] = React.useState('loading');
       const [note, setNote] = React.useState('');
 
-      const bytes = byteLength(html || '');
-      const isEmpty = String(html || '').trim().length === 0;
-      const tooLarge = bytes > MAX_FRAME_BYTES;
+      const html = doc && typeof doc.text === 'string' ? doc.text : '';
+      const bytes = doc && typeof doc.bytes === 'number' ? doc.bytes : byteLength(html);
+      const tooLarge = (doc && doc.tooLarge === true) || bytes > MAX_FRAME_BYTES;
+      const missing = !!(doc && doc.missing === true);
+      const readError = doc && typeof doc.error === 'string' ? doc.error : null;
+      const isEmpty = !tooLarge && !missing && !readError && html.trim().length === 0;
 
       // Reset the frame lifecycle whenever the document or the reload token changes.
       React.useEffect(() => {
@@ -822,6 +862,19 @@ window.__ModuleLoader__.load({
           if (!data || data.__dshDesign !== 1) return;
           if (data.type === 'ready') {
             setStatus('ok');
+            if (data.sandbox) {
+              // The frame itself tested the boundary; report the result on the
+              // page console, which is where AC10 asks for the interception trace.
+              const facts = data.sandbox;
+              const parentVerdict = facts.parentReachable === false ? '已拦截(' + facts.parentError + ')' : '允许';
+              console.info(
+                '[design-canvas] 沙箱生效 frame=' + frame.id +
+                  ' sandbox="allow-scripts"（无 allow-same-origin）' +
+                  ' opaqueOrigin=' + facts.opaqueOrigin +
+                  ' parent.document=' + parentVerdict +
+                  ' cookie=' + (facts.cookieReadable ? '可读' : '已拦截(' + (facts.cookieError || 'empty') + ')'),
+              );
+            }
             return;
           }
           if (data.type === 'select') {
@@ -1013,13 +1066,19 @@ window.__ModuleLoader__.load({
         );
 
       let body;
-      if (isEmpty) {
-        body = placeholder(t('frameEmpty'), 'frames/' + frame.id + '.html 是 0 字节。让 DSH 重新生成这一屏，或直接编辑该文件。');
-      } else if (tooLarge) {
+      // Order matters: an unreadable or oversized frame must never be reported
+      // as merely empty, which is what a failed read used to look like.
+      if (tooLarge) {
         body = placeholder(
           t('frameTooLarge'),
           'frames/' + frame.id + '.html 为 ' + (bytes / 1024 / 1024).toFixed(2) + ' MB，超过 2 MB 上限（AC11）。画布不会渲染它。',
         );
+      } else if (missing) {
+        body = placeholder(t('frameMissing'), 'frames/' + frame.id + '.html 还不存在。让 DSH 生成这一屏，或点下面的按钮重试。');
+      } else if (readError) {
+        body = placeholder(t('frameUnreadable'), '读取 frames/' + frame.id + '.html 失败：' + readError);
+      } else if (isEmpty) {
+        body = placeholder(t('frameEmpty'), 'frames/' + frame.id + '.html 是 0 字节。让 DSH 重新生成这一屏，或直接编辑该文件。');
       } else {
         body = h(
           'div',
@@ -1323,8 +1382,21 @@ window.__ModuleLoader__.load({
 
           const entries = await Promise.all(
             nextProject.frames.map(async (frame) => {
-              const read = await bridge.readText(sessionId, framePath(frame));
-              return [frame.id, read.ok ? read.text : ''];
+              const path = framePath(frame);
+              const stat = await bridge.statFile(sessionId, path);
+              // Size decides the placeholder; only a plausible document is read.
+              if (stat.ok) {
+                if (stat.bytes === 0) return [frame.id, { text: '', bytes: 0, empty: true }];
+                if (typeof stat.bytes === 'number' && stat.bytes > MAX_FRAME_BYTES) {
+                  return [frame.id, { text: '', bytes: stat.bytes, tooLarge: true }];
+                }
+              }
+              const read = await bridge.readText(sessionId, path);
+              if (!read.ok) {
+                if (read.absent) return [frame.id, { text: '', bytes: null, missing: true }];
+                return [frame.id, { text: '', bytes: stat.ok ? stat.bytes : null, error: read.error.message }];
+              }
+              return [frame.id, { text: read.text, bytes: byteLength(read.text) }];
             }),
           );
           setHtmlById(Object.fromEntries(entries));
@@ -1485,7 +1557,11 @@ window.__ModuleLoader__.load({
       /** The probe rewrote the document; persist it (AC6). */
       const onElementChanged = React.useCallback(
         (frameId, html, info) => {
-          setHtmlById((current) => Object.assign({}, current, { [frameId]: html }));
+          setHtmlById((current) =>
+            Object.assign({}, current, {
+              [frameId]: { text: html, bytes: byteLength(html) },
+            }),
+          );
           if (info) setSelectedElement({ frameId: frameId, info: info });
           const frame = project && project.frames ? project.frames.find((item) => item.id === frameId) : null;
           if (!frame || !sessionId) return;
@@ -1871,7 +1947,7 @@ window.__ModuleLoader__.load({
                 h(FrameView, {
                   key: frame.id,
                   frame: frame,
-                  html: htmlById[frame.id] || '',
+                  doc: htmlById[frame.id] || null,
                   selected: frame.id === selectedFrameId,
                   selectedElement: selectedElement && selectedElement.frameId === frame.id ? selectedElement.info : null,
                   mode: mode,
