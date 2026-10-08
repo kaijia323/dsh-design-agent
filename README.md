@@ -83,7 +83,8 @@ node scripts/post-restart-check.mjs               # 重启后：路由/工具/�
 
 ## 状态
 
-形态已定稿为「聊天 + 右侧栏预览面板」（画布形态 SPEC v6）；元素交互在 v7 改成「点元素引用进对话」，属性面板与批注入口退场。
+形态已定稿为「聊天 + 右侧栏预览面板」（**形态 v6**）；元素交互在 v7 改成「点元素引用进对话」，属性面板与批注入口退场。
+> 口径说明：「形态 v6 / v7」指产品形态的第几轮定稿，与各 SPEC 文件内部的 `version` 字段不是一回事（`feature-dsh-design-canvas.yaml` 现为 version 12，`feature-element-reference-to-composer.yaml` 现为 version 5）。
 
 - 画布形态：[执行契约 specs/feature-dsh-design-canvas.yaml](specs/feature-dsh-design-canvas.yaml) · [验收报告 docs/verification-feature-dsh-design-canvas.md](docs/verification-feature-dsh-design-canvas.md)
 - 元素引用：[执行契约 specs/feature-element-reference-to-composer.yaml](specs/feature-element-reference-to-composer.yaml) · [验收报告 docs/verification-element-reference-to-composer.md](docs/verification-element-reference-to-composer.md)

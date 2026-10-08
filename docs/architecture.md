@@ -1,7 +1,7 @@
 # 架构说明
 
 > 这份文档记录"为什么这样设计"和"怎么跑起来"，供后续维护者与 agent 使用。
-> 执行契约见 [`specs/feature-dsh-design-canvas.yaml`](../specs/feature-dsh-design-canvas.yaml)（12 条验收标准，当前 v6）。
+> 执行契约见 [`specs/feature-dsh-design-canvas.yaml`](../specs/feature-dsh-design-canvas.yaml)（12 条验收标准；本文描述的形态为 **v6**，元素交互的 v7 变更见 [`specs/feature-element-reference-to-composer.yaml`](../specs/feature-element-reference-to-composer.yaml)）。
 
 ## 一句话
 
